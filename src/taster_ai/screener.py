@@ -16,9 +16,9 @@ from dataclasses import dataclass
 from typing import Any, Iterable, Mapping
 
 from .actions import Action, Messages, decide, render
-from .detectors import Detector
+from .detectors import Detector, HeuristicDetector, as_detector
 from .policy import Policy, Rule
-from .sinks import Sink
+from .sinks import Sink, log_sink
 from .verdict import ToolContext, Verdict
 
 logger = logging.getLogger("taster_ai")
@@ -106,33 +106,49 @@ def _hash(text: str) -> str:
 class Screener:
     """Screens tool results according to a policy.
 
+    policy      the rules (what to screen, what to do)
+    detector    the default judge: a Detector, or a LangChain chat model
+                (wrapped in LLMDetector). Defaults to the free
+                HeuristicDetector so it works with no setup.
+    detectors   extra judges by name, for rules that say `detector: <name>`
+    sinks       callables that receive each decision's record; defaults to
+                [log_sink]. Pass [] for none.
+    messages    the wording of withheld/wrapped results
     overlap     chars shared by neighbouring chunks of a long result
     max_chunks  results needing more chunks than this count as unscreenable
                 (the rule's on_error applies) rather than being half-checked
     cache_size  verdicts remembered by text hash, so a page seen twice is
                 judged once; 0 disables
-    sinks       callables that receive each decision's record
-    messages    the wording of withheld/wrapped results
     """
 
     def __init__(
         self,
         policy: Policy,
+        detector: Any = None,
         *,
-        sinks: Iterable[Sink] = (),
+        detectors: Mapping[str, Any] | None = None,
+        sinks: Iterable[Sink] | None = None,
         messages: Messages | None = None,
         overlap: int = 200,
         max_chunks: int = 8,
         cache_size: int = 1024,
     ):
         self.policy = policy
-        self.sinks = list(sinks)
+        self.detector = as_detector(detector) if detector is not None else HeuristicDetector()
+        self.detectors = {name: as_detector(d) for name, d in (detectors or {}).items()}
+        missing = sorted({r.detector for r in policy.rules if r.mode != "pass" and r.detector} - set(self.detectors))
+        if missing:
+            raise ValueError(f"rules name detectors that weren't given: {missing}; pass detectors={{name: ...}}")
+        self.sinks = [log_sink] if sinks is None else list(sinks)
         self.messages = messages or Messages()
         self.overlap = overlap
         self.max_chunks = max_chunks
         self.cache_size = cache_size
         self._cache: OrderedDict[tuple[int, str], Verdict] = OrderedDict()
         self._lock = threading.Lock()
+
+    def detector_for(self, rule: Rule) -> Detector:
+        return self.detectors[rule.detector] if rule.detector else self.detector
 
     def screen(
         self,
@@ -170,7 +186,7 @@ class Screener:
         return decision
 
     def _verdict(self, rule: Rule, text: str, context: ToolContext) -> tuple[Verdict, int]:
-        detector = self.policy.detector_for(rule)
+        detector = self.detector_for(rule)
         pieces = chunk(text, detector.max_chars, min(self.overlap, detector.max_chars // 2))
         if len(pieces) > self.max_chunks:
             return Verdict.failed(detector.name, f"too-large:{len(text)}-chars"), len(pieces)

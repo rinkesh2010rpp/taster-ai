@@ -1,14 +1,18 @@
-# Example policy. Load with Policy.from_yaml("examples/taster.yaml").
-detector:
-  type: fallback
-  primary: { type: jev, timeout: 5 }
-  fallback: heuristic
-
+# Example policy: rules only. Load with Policy.from_yaml("examples/taster.yaml")
+# and give the detector(s) to the middleware or Screener.
 rules:
   # Web search results: enforce once shadow logs look clean.
   - tool: search_web
     mode: enforce
     threshold: 0.85
+
+  # Third-party MCP servers: stricter, judged by a detector registered as
+  # "strict" (detectors={"strict": ...}), and blocked if it can't answer.
+  - tool: "mcp_*"
+    mode: enforce
+    detector: strict
+    unclear: withhold
+    on_error: block
 
   # Shell commands, but only those that fetch from the internet.
   - tool: execute

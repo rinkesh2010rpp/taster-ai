@@ -1,14 +1,16 @@
-"""Screen some text directly, without an agent. Runs offline with the
-heuristic detector; set OPENROUTER_API_KEY and swap in JevDetector() to try
-Jev.
+"""Screen some text directly, without an agent.
+
+Runs offline: Jev is tried first and, with no OPENROUTER_API_KEY set, the
+free heuristic answers instead. Set the key to see Jev's verdicts.
 
     python examples/screen_text.py
 """
 
-from taster_ai import HeuristicDetector, Policy, Rule, Screener, print_sink
+from taster_ai import FallbackDetector, HeuristicDetector, JevDetector, Policy, Rule, Screener, print_sink
 
 screener = Screener(
-    Policy(rules=[Rule("*", mode="enforce")], detector=HeuristicDetector()),
+    policy=Policy(rules=[Rule("*", mode="enforce")]),
+    detector=FallbackDetector(JevDetector(), HeuristicDetector()),
     sinks=[print_sink],
 )
 
@@ -19,5 +21,5 @@ samples = {
 
 for name, text in samples.items():
     decision = screener.screen("fetch_page", {}, text)
-    print(f"{name}: {decision.action}")
+    print(f"{name}: {decision.action}  (judged by {decision.verdict.detector})")
     print("   model sees:", decision.render(text) or text)

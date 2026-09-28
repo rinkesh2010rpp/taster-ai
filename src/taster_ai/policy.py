@@ -1,4 +1,9 @@
-"""Rules: which tool results get screened, how, and what happens next.
+"""Rules: which tool results get screened, and what happens next.
+
+A policy is plain configuration: rules only, no detectors, no keys. That
+makes it safe to keep in git and to load from YAML, JSON or an environment
+variable. The detectors that do the judging are given to the Screener (or
+middleware) separately; a rule can name one of them.
 
 Keep the policy somewhere the agent cannot write (your code, a config file
 outside the agent's workspace, or an environment variable). An agent that
@@ -13,8 +18,6 @@ import os
 import re
 from dataclasses import dataclass, field
 from typing import Any, Literal, Mapping
-
-from .detectors import Detector, build_detector
 
 Mode = Literal["pass", "shadow", "enforce"]
 MODES = ("pass", "shadow", "enforce")
@@ -38,7 +41,8 @@ class Rule:
     when_args  {arg_name: regex}; the rule matches only if every named
                argument matches (re.search). A call that doesn't match falls
                through to later rules.
-    detector   overrides the policy's detector for this rule
+    detector   name of a detector registered with the screener
+               (`detectors={"name": ...}`); None uses the default detector
     """
 
     tool: str
@@ -47,7 +51,7 @@ class Rule:
     on_error: Literal["label", "block"] = "label"
     unclear: Literal["wrap", "withhold", "pass"] = "wrap"
     when_args: Mapping[str, str] = field(default_factory=dict)
-    detector: Detector | None = None
+    detector: str | None = None
 
     def __post_init__(self):
         if self.mode not in MODES:
@@ -58,6 +62,8 @@ class Rule:
             raise ValueError(f"rule {self.tool!r}: unclear must be one of {UNCLEAR}")
         if not 0.0 <= float(self.threshold) <= 1.0:
             raise ValueError(f"rule {self.tool!r}: threshold must be between 0 and 1")
+        if self.detector is not None and not isinstance(self.detector, str):
+            raise ValueError(f"rule {self.tool!r}: detector must be a name; register the object with the screener")
         self._arg_patterns = {arg: re.compile(pattern) for arg, pattern in (self.when_args or {}).items()}
 
     def matches(self, tool: str, args: Mapping[str, Any]) -> bool:
@@ -72,19 +78,13 @@ _RULE_KEYS = {"tool", "mode", "threshold", "on_error", "unclear", "when_args", "
 
 @dataclass
 class Policy:
-    """An ordered list of rules (first match wins) and a default detector.
+    """An ordered list of rules; the first match wins.
 
     A tool call that matches no rule is passed unscreened; end the list with
     a `Rule("*", ...)` to choose otherwise.
     """
 
-    rules: list[Rule]
-    detector: Detector | None = None
-
-    def __post_init__(self):
-        for rule in self.rules:
-            if rule.mode != "pass" and rule.detector is None and self.detector is None:
-                raise ValueError(f"rule {rule.tool!r} screens results but no detector is set")
+    rules: list[Rule] = field(default_factory=list)
 
     def rule_for(self, tool: str, args: Mapping[str, Any] | None = None) -> Rule:
         for rule in self.rules:
@@ -92,58 +92,47 @@ class Policy:
                 return rule
         return PASS
 
-    def detector_for(self, rule: Rule) -> Detector:
-        detector = rule.detector or self.detector
-        assert detector is not None  # guaranteed by __post_init__
-        return detector
-
     @classmethod
-    def from_dict(cls, data: Mapping[str, Any], *, detectors: Mapping[str, Detector] | None = None) -> Policy:
-        """Build from plain data (what a YAML or JSON file holds).
+    def from_dict(cls, data: Mapping[str, Any]) -> Policy:
+        """Build from plain data (what a YAML or JSON file holds):
 
-            {"detector": "jev",
-             "rules": [{"tool": "search_web", "mode": "enforce"},
+            {"rules": [{"tool": "search_web", "mode": "enforce"},
+                       {"tool": "mcp_*", "mode": "enforce", "detector": "jev"},
                        {"tool": "*", "mode": "pass"}]}
 
-        Detectors are named ("jev", "heuristic", or a key of `detectors`) or
-        given as {"type": ..., **options}. Unknown keys raise, so a typo
-        can't silently switch screening off.
+        Unknown keys raise, so a typo can't silently switch screening off.
         """
-        unknown = set(data) - {"detector", "rules"}
+        unknown = set(data) - {"rules"}
         if unknown:
-            raise ValueError(f"unknown policy keys: {sorted(unknown)}")
+            raise ValueError(f"unknown policy keys: {sorted(unknown)} (a policy holds rules only)")
         rules = []
         for raw in data.get("rules") or []:
             bad = set(raw) - _RULE_KEYS
             if bad:
                 raise ValueError(f"rule {raw.get('tool')!r}: unknown keys {sorted(bad)}")
-            options = dict(raw)
-            if "detector" in options:
-                options["detector"] = build_detector(options["detector"], detectors)
-            rules.append(Rule(**options))
-        detector = build_detector(data["detector"], detectors) if data.get("detector") else None
-        return cls(rules=rules, detector=detector)
+            rules.append(Rule(**raw))
+        return cls(rules=rules)
 
     @classmethod
-    def from_json(cls, text: str, **kwargs) -> Policy:
-        return cls.from_dict(json.loads(text), **kwargs)
+    def from_json(cls, text: str) -> Policy:
+        return cls.from_dict(json.loads(text))
 
     @classmethod
-    def from_yaml(cls, source: str, **kwargs) -> Policy:
+    def from_yaml(cls, source: str) -> Policy:
         """`source` is a path to a YAML file, or YAML text."""
         import yaml  # optional dependency: pip install taster-ai[yaml]
 
         if "\n" not in source and os.path.exists(source):
             with open(source, encoding="utf-8") as f:
                 source = f.read()
-        return cls.from_dict(yaml.safe_load(source) or {}, **kwargs)
+        return cls.from_dict(yaml.safe_load(source) or {})
 
     @classmethod
-    def from_env(cls, var: str = "TASTER_POLICY", default: Policy | None = None, **kwargs) -> Policy:
+    def from_env(cls, var: str = "TASTER_POLICY", default: Policy | None = None) -> Policy:
         """Load JSON from an environment variable, or return `default` if it's unset."""
         raw = os.environ.get(var, "").strip()
         if not raw:
             if default is None:
                 raise ValueError(f"{var} is not set and no default policy was given")
             return default
-        return cls.from_json(raw, **kwargs)
+        return cls.from_json(raw)

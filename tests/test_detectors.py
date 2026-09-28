@@ -5,7 +5,7 @@ import urllib.error
 import pytest
 from conftest import PAGES, FakeDetector, verdict
 
-from taster_ai import FallbackDetector, HeuristicDetector, JevDetector, Verdict
+from taster_ai import CallableDetector, FallbackDetector, HeuristicDetector, JevDetector, Verdict
 
 # --- heuristic -----------------------------------------------------------
 
@@ -52,16 +52,31 @@ def test_safe_detect_turns_exceptions_into_errors():
     assert v.label == "error" and "RuntimeError" in v.error
 
 
-def test_fallback_used_only_when_primary_fails():
-    failing = FakeDetector(lambda _t: Verdict.failed("fake", "http-503"))
+def test_fallback_chain_uses_first_working_detector():
+    down = FakeDetector(lambda _t: Verdict.failed("fake", "http-503"))
+    also_down = FakeDetector(lambda _t: Verdict.failed("fake", "timeout"))
     backup = FakeDetector(lambda _t: verdict("injection", 0.9))
-    v = FallbackDetector(failing, backup).safe_detect("x")
-    assert v.label == "injection" and "fallback" in v.detector and "http-503" in v.detector
+    v = FallbackDetector(down, also_down, backup).safe_detect("x")
+    assert v.label == "injection" and "http-503" in v.detector and "timeout" in v.detector
 
     working = FakeDetector(lambda _t: verdict("clean", 0.99))
     backup.calls = 0
     assert FallbackDetector(working, backup).safe_detect("x").label == "clean"
     assert backup.calls == 0
+
+    v = FallbackDetector(down, also_down).safe_detect("x")
+    assert v.label == "error" and "http-503" in v.error and "timeout" in v.error
+
+
+def test_fallback_needs_two():
+    with pytest.raises(ValueError):
+        FallbackDetector(HeuristicDetector())
+
+
+def test_callable_detector():
+    v = CallableDetector(lambda t: ("injection", 0.8), name="mine").safe_detect("x")
+    assert (v.label, v.confidence, v.detector) == ("injection", 0.8, "mine")
+    assert CallableDetector(lambda t: ("nonsense", 1)).safe_detect("x").label == "error"
 
 
 # --- jev (HTTP mocked) -----------------------------------------------------

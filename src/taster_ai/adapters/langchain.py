@@ -1,8 +1,13 @@
 """LangChain (v1) agent middleware, which also covers deepagents.
 
+    from taster_ai import Policy, JevDetector, print_sink
     from taster_ai.adapters.langchain import TasterMiddleware
 
-    taster = TasterMiddleware(policy)
+    taster = TasterMiddleware(
+        policy=Policy.from_yaml("taster.yaml"),   # what to screen
+        detector=JevDetector(),                   # who judges (or a chat model)
+        sinks=[print_sink],                       # where to log
+    )
     agent = create_agent(model, tools, middleware=[taster])
 
 deepagents does not hand new middleware to its built-in "general-purpose"
@@ -20,7 +25,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
@@ -37,12 +42,23 @@ _SUBAGENT_TOOL = "task"  # deepagents' tool for handing work to a subagent
 class TasterMiddleware(AgentMiddleware):
     """Screens every tool result before the model sees it."""
 
-    def __init__(self, policy: Policy | None = None, *, screener: Screener | None = None, sinks: Iterable[Sink] = (), **screener_options: Any):
+    def __init__(
+        self,
+        policy: Policy | None = None,
+        detector: Any = None,
+        *,
+        detectors: Mapping[str, Any] | None = None,
+        sinks: Iterable[Sink] | None = None,
+        screener: Screener | None = None,
+        **screener_options: Any,
+    ):
+        """policy, detector, detectors, sinks and any other options are
+        passed to Screener (see there); or pass a ready `screener`."""
         super().__init__()
         if screener is None:
             if policy is None:
-                raise ValueError("pass a policy or a screener")
-            screener = Screener(policy, sinks=sinks, **screener_options)
+                raise ValueError("pass a policy (or a ready screener)")
+            screener = Screener(policy, detector, detectors=detectors, sinks=sinks, **screener_options)
         self.screener = screener
         self._covers_subagents = False
         self._warned = False

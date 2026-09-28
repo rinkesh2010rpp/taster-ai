@@ -1,10 +1,11 @@
-"""The detector interface, and a detector that falls back to another."""
+"""The detector interface, a detector chain, and a wrapper for plain functions."""
 
 from __future__ import annotations
 
 import time
 from abc import ABC, abstractmethod
 from dataclasses import replace
+from typing import Any, Callable
 
 from ..verdict import LABELS, ToolContext, Verdict
 
@@ -41,24 +42,50 @@ class Detector(ABC):
 
 
 class FallbackDetector(Detector):
-    """Use `primary`; when it can't give a verdict, ask `fallback` instead.
+    """Try detectors in order; the first one that gives a verdict wins.
 
-    Typical use: a strong remote detector (Jev) with the free local heuristic
-    behind it, so an outage still catches the obvious attacks instead of
-    passing everything through unscreened.
+    Typical use: a strong remote detector first, a cheaper one behind it,
+    and the free heuristic last, so an outage still catches the obvious
+    attacks instead of passing everything through unscreened.
+
+        FallbackDetector(JevDetector(), my_chat_model, HeuristicDetector())
+
+    Chat models are wrapped in LLMDetector automatically.
     """
 
-    def __init__(self, primary: Detector, fallback: Detector):
-        self.primary = primary
-        self.fallback = fallback
-        self.name = f"{primary.name}|{fallback.name}"
-        self.max_chars = min(primary.max_chars, fallback.max_chars)
+    def __init__(self, *detectors: Any):
+        from . import as_detector  # late import: detectors/__init__ imports this module
+
+        if len(detectors) < 2:
+            raise ValueError("FallbackDetector needs at least two detectors")
+        self.detectors = [as_detector(d) for d in detectors]
+        self.name = "|".join(d.name for d in self.detectors)
+        self.max_chars = min(d.max_chars for d in self.detectors)
 
     def detect(self, text: str, context: ToolContext | None = None) -> Verdict:
-        verdict = self.primary.safe_detect(text, context)
-        if verdict.ok:
-            return verdict
-        backup = self.fallback.safe_detect(text, context)
-        if not backup.ok:
-            return Verdict.failed(self.name, f"{verdict.error}; fallback: {backup.error}")
-        return replace(backup, detector=f"{backup.detector} (fallback: {self.primary.name} {verdict.error})")
+        errors = []
+        for detector in self.detectors:
+            verdict = detector.safe_detect(text, context)
+            if verdict.ok:
+                if errors:  # say in the logs that a fallback answered
+                    verdict = replace(verdict, detector=f"{verdict.detector} (fallback: {'; '.join(errors)})")
+                return verdict
+            errors.append(f"{detector.name} {verdict.error}")
+        return Verdict.failed(self.name, "; ".join(errors))
+
+
+class CallableDetector(Detector):
+    """Wrap any function `text -> (label, confidence)` as a detector, for
+    in-house models or SDKs Taster has no adapter for.
+
+        CallableDetector(lambda text: my_classifier(text), name="in-house")
+    """
+
+    def __init__(self, fn: Callable[[str], tuple[str, float]], *, name: str = "callable", max_chars: int = 8000):
+        self.fn = fn
+        self.name = name
+        self.max_chars = max_chars
+
+    def detect(self, text: str, context: ToolContext | None = None) -> Verdict:
+        label, confidence = self.fn(text)
+        return Verdict(label, float(confidence), {label: float(confidence)}, self.name)  # type: ignore[arg-type]

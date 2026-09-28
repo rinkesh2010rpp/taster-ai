@@ -69,7 +69,7 @@ def run(**agent_options):
 
 
 def taster():
-    return TasterMiddleware(Policy(rules=[Rule("search_web", mode="enforce")], detector=HeuristicDetector()))
+    return TasterMiddleware(Policy(rules=[Rule("search_web", mode="enforce")]), HeuristicDetector(), sinks=[])
 
 
 def test_main_agent_and_subagent_are_both_screened():

@@ -1,42 +1,48 @@
 """Detectors judge whether text is a prompt injection. Add your own by
-subclassing `Detector` and implementing `detect`."""
+subclassing `Detector` and implementing `detect`, or wrap a function with
+`CallableDetector`."""
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any
 
-from .base import Detector, FallbackDetector
+from .base import CallableDetector, Detector, FallbackDetector
 from .heuristic import HeuristicDetector
 from .jev import JevDetector
 
-__all__ = ["Detector", "FallbackDetector", "HeuristicDetector", "JevDetector", "build_detector"]
+__all__ = [
+    "CallableDetector",
+    "Detector",
+    "FallbackDetector",
+    "HeuristicDetector",
+    "JevDetector",
+    "LLMDetector",
+    "as_detector",
+]
 
-BUILTIN: dict[str, type[Detector]] = {"jev": JevDetector, "heuristic": HeuristicDetector}
+
+def __getattr__(name: str) -> Any:
+    # LLMDetector needs langchain-core; import it only when asked for.
+    if name == "LLMDetector":
+        from .llm import LLMDetector
+
+        return LLMDetector
+    raise AttributeError(name)
 
 
-def build_detector(spec: Any, named: Mapping[str, Detector] | None = None) -> Detector:
-    """Build a detector from config.
+def as_detector(obj: Any) -> Detector:
+    """A Detector as is, or a LangChain chat model wrapped in LLMDetector."""
+    if isinstance(obj, Detector):
+        return obj
+    try:
+        from langchain_core.language_models import BaseChatModel
+    except ImportError:
+        BaseChatModel = None  # type: ignore[assignment,misc]
+    if BaseChatModel is not None and isinstance(obj, BaseChatModel):
+        from .llm import LLMDetector
 
-    `spec` is a Detector, a name ("jev", "heuristic", or a key of `named`),
-    or a dict: {"type": "jev", "timeout": 3} or
-    {"type": "fallback", "primary": ..., "fallback": ...}.
-    """
-    if isinstance(spec, Detector):
-        return spec
-    if isinstance(spec, str):
-        if named and spec in named:
-            return named[spec]
-        if spec in BUILTIN:
-            return BUILTIN[spec]()
-        raise ValueError(f"unknown detector {spec!r}")
-    if isinstance(spec, Mapping):
-        options = dict(spec)
-        kind = options.pop("type", None)
-        if kind == "fallback":
-            return FallbackDetector(
-                build_detector(options.pop("primary"), named), build_detector(options.pop("fallback"), named)
-            )
-        if kind in BUILTIN:
-            return BUILTIN[kind](**options)
-        raise ValueError(f"unknown detector type {kind!r}")
-    raise ValueError(f"can't build a detector from {spec!r}")
+        return LLMDetector(obj)
+    raise TypeError(
+        f"expected a Detector or a LangChain chat model, got {type(obj).__name__}; "
+        "wrap a plain function with CallableDetector"
+    )
