@@ -13,7 +13,7 @@ from .screener import Decision, Screener
 from .sinks import BackgroundSink, JsonlSink, log_sink, print_sink
 from .verdict import ToolContext, Verdict
 
-__version__ = "0.1.0.dev0"
+__version__ = "0.1.0.dev1"
 
 __all__ = [
     "BackgroundSink",
