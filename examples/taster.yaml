@@ -1,0 +1,21 @@
+# Example policy. Load with Policy.from_yaml("examples/taster.yaml").
+detector:
+  type: fallback
+  primary: { type: jev, timeout: 5 }
+  fallback: heuristic
+
+rules:
+  # Web search results: enforce once shadow logs look clean.
+  - tool: search_web
+    mode: enforce
+    threshold: 0.85
+
+  # Shell commands, but only those that fetch from the internet.
+  - tool: execute
+    mode: shadow
+    when_args:
+      command: '\bcurl\b|\bwget\b|https?://|\bgit\s+(clone|pull|fetch)\b'
+
+  # Everything else (local files, your own tools) is not screened.
+  - tool: "*"
+    mode: pass
