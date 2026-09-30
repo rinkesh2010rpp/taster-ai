@@ -2,7 +2,7 @@
 
 **Your agent eats nothing we haven't tasted.**
 
-> Status: early alpha (0.1.0.dev1). APIs may change. Not on PyPI yet.
+> Status: early alpha (0.1.0.dev2). APIs may change. Not on PyPI yet.
 
 ## What it is
 
@@ -61,7 +61,7 @@ What that gives you:
 Not on PyPI yet; install from GitHub, pinned to a release:
 
 ```bash
-pip install "taster-ai[langchain,yaml] @ git+https://github.com/rinkesh2010rpp/taster-ai@v0.1.0.dev1"
+pip install "taster-ai[langchain,yaml] @ git+https://github.com/rinkesh2010rpp/taster-ai@v0.1.0.dev2"
 ```
 
 Requires Python 3.10+ and, for the middleware, LangChain 1.x.
@@ -163,6 +163,11 @@ Outside an agent framework, `Screener` takes the same arguments:
 `Screener(policy, detector).screen("read_email", {}, text)` returns a
 decision (or `None` if the tool isn't checked).
 
+Both also take tuning options for long results: `max_chunks=8` (results
+needing more chunks than this count as unscreenable), `max_splits=4` (how many
+times a chunk the detector refuses as too long is halved), `overlap=200`
+(characters shared by neighbouring chunks) and `cache_size=1024`.
+
 ### Policy rules
 
 Rules are checked top to bottom; the first match wins; unmatched tools are
@@ -192,7 +197,7 @@ own policy can be talked into switching its screen off.
 | Detector | What it is | Cost |
 |---|---|---|
 | `HeuristicDetector()` | patterns real attacks use: override phrases, fake system/owner messages, hiding things from the user, secrets, directives in HTML comments, invisible Unicode | free, instant, offline |
-| `JevDetector()` | [Jev](https://openrouter.ai) decision model via OpenRouter; calibrated probabilities | ~0.2–0.4 s per check |
+| `JevDetector()` | [Jev](https://openrouter.ai) decision model via OpenRouter; calibrated probabilities; up to 120,000 characters per check | ~0.2–0.4 s per check |
 | your chat model | any LangChain chat model, wrapped in `LLMDetector` automatically | your model's price and speed |
 | `FallbackDetector(a, b, …)` | try each in order; the first that answers wins | — |
 | `CallableDetector(fn)` | any function `text -> (label, confidence)` | yours |
@@ -210,6 +215,13 @@ TasterMiddleware(policy, detector=JevDetector(), detectors={"strict": my_llm})
 
 A rule naming a detector you didn't pass fails when the middleware is
 created, not mid-run.
+
+**Writing your own detector:** subclass `Detector`, set `name` and
+`max_chars` (the biggest piece it takes), and implement
+`detect(text, context) -> Verdict`. If your model's limit is in tokens and you
+can't count them up front, set `max_chars` for plain text and return
+`Verdict.failed(self.name, TOO_LONG)` when a piece overflows: the screener
+halves it and asks again.
 
 **Your LLM as the judge:** the judge reads the same untrusted text, so a page
 can try to talk it round. `LLMDetector` fences the text between random
@@ -264,8 +276,10 @@ first time the agent delegates.
 - **Never breaks a turn.** Detector failures, timeouts and bugs become
   `error` verdicts, handled by the rule's `on_error`.
 - **Long results** are split into overlapping chunks and checked in parallel;
-  one flagged chunk flags the whole result. Results too long to check fully
-  count as unscreenable rather than half-checked.
+  one flagged chunk flags the whole result. A chunk the detector refuses as
+  too long is halved and checked again. Results too long to check fully
+  count as unscreenable rather than half-checked (with Jev, past ~950,000
+  characters).
 - **Repeats are cheap:** verdicts are cached by text hash.
 - **The core has no dependencies.** LangChain is needed only for the
   middleware and `LLMDetector`.
@@ -280,8 +294,10 @@ first time the agent delegates.
   to slip past it. Model-based detectors still see quoted text.
 - **The LLM judge's resistance is untested on real models**; its defences are
   covered by tests with fake models only.
-- **Jev's input size (8,000 characters per chunk) is an assumption**, and Jev
-  is an alpha OpenRouter endpoint.
+- **Jev is an alpha OpenRouter endpoint**, and its tokenizer isn't public.
+  Chunks are sized for plain text (120,000 characters); denser text such as
+  base64 or code overflows Jev's 32k-token limit and costs a few extra calls
+  while it's split. Long-page accuracy was checked on synthetic prose only.
 - **Detection is probabilistic.** Taster reduces risk; keep least-privilege
   tools and human approval for dangerous actions.
 
