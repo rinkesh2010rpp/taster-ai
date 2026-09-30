@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from dataclasses import replace
 from typing import Any, Callable
 
-from ..verdict import LABELS, ToolContext, Verdict
+from ..verdict import LABELS, TOO_LONG, ToolContext, Verdict
 
 
 class Detector(ABC):
@@ -21,7 +21,9 @@ class Detector(ABC):
     #: Short name, shown in logs and verdicts.
     name: str = "detector"
     #: The most text this detector takes in one call; the screener splits
-    #: longer tool results into chunks of this size.
+    #: longer tool results into chunks of this size. A detector whose real
+    #: limit is in tokens can set this high and return an error verdict of
+    #: TOO_LONG when a chunk overflows; the screener then halves it.
     max_chars: int = 8000
 
     @abstractmethod
@@ -66,6 +68,8 @@ class FallbackDetector(Detector):
         errors = []
         for detector in self.detectors:
             verdict = detector.safe_detect(text, context)
+            if verdict.too_long:  # let the screener split it for the whole chain, not the backup alone
+                return Verdict.failed(self.name, TOO_LONG)
             if verdict.ok:
                 if errors:  # say in the logs that a fallback answered
                     verdict = replace(verdict, detector=f"{verdict.detector} (fallback: {'; '.join(errors)})")

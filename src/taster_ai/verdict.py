@@ -8,6 +8,10 @@ from typing import Any, Literal, Mapping
 Label = Literal["clean", "injection", "unclear", "error"]
 LABELS: tuple[str, ...] = ("clean", "injection", "unclear", "error")
 
+#: The `error` of a detector that refused text as too long for it. The
+#: screener then splits the text in half and asks again.
+TOO_LONG = "too-long"
+
 
 @dataclass(frozen=True)
 class Verdict:
@@ -29,6 +33,10 @@ class Verdict:
     @property
     def ok(self) -> bool:
         return self.label != "error"
+
+    @property
+    def too_long(self) -> bool:
+        return self.error == TOO_LONG
 
     @classmethod
     def failed(cls, detector: str, error: str, latency_s: float = 0.0) -> Verdict:

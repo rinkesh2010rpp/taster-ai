@@ -6,6 +6,7 @@ from conftest import FakeDetector, verdict
 
 from taster_ai import BackgroundSink, HeuristicDetector, JsonlSink, Policy, Rule, Screener, Verdict, log_sink
 from taster_ai.screener import chunk, combine
+from taster_ai.verdict import TOO_LONG
 
 
 def screener_for(detector, **rule_options):
@@ -68,6 +69,35 @@ def test_too_many_chunks_is_unscreenable(fake):
     s = Screener(Policy(rules=[Rule("*", mode="enforce", on_error="block")]), fake(max_chars=10), sinks=[], max_chunks=3)
     d = s.screen("t", {}, "z" * 500)
     assert d.verdict.error.startswith("too-large") and d.action == "withheld"
+
+
+def refuses_over(limit):
+    """A detector that takes at most `limit` chars, like Jev's token limit."""
+    return FakeDetector(
+        lambda t: Verdict.failed("fake", TOO_LONG) if len(t) > limit
+        else verdict("injection", 0.95) if "EVIL" in t else verdict("clean", 0.99)
+    )
+
+
+def test_a_refused_chunk_is_halved_until_it_fits():
+    text = "".join(f"line {i}\n" for i in range(150))  # ~1200 chars, no two pieces alike
+    d = screener_for(refuses_over(300)).screen("search_web", {}, text)
+    assert d.verdict.label == "clean" and d.chunks > 4  # clean, not error: every piece was accepted
+
+    d = screener_for(refuses_over(300)).screen("search_web", {}, text + "EVIL")
+    assert d.verdict.label == "injection" and d.action == "withheld"
+
+
+def test_split_halves_overlap_so_nothing_is_missed():
+    detector = refuses_over(600)
+    text = "x" * 500 + "EVIL" + "y" * 496  # the attack sits right on the midpoint
+    assert screener_for(detector).screen("search_web", {}, text).verdict.label == "injection"
+
+
+def test_giving_up_on_splits_follows_on_error():
+    s = Screener(Policy(rules=[Rule("*", mode="enforce", on_error="block")]), refuses_over(10), sinks=[], max_splits=2)
+    d = s.screen("t", {}, "z" * 1000)
+    assert d.verdict.too_long and d.action == "withheld" and d.chunks == 4
 
 
 def test_combine_order():

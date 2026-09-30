@@ -117,6 +117,8 @@ class Screener:
     overlap     chars shared by neighbouring chunks of a long result
     max_chunks  results needing more chunks than this count as unscreenable
                 (the rule's on_error applies) rather than being half-checked
+    max_splits  how many times a chunk the detector refuses as too long is
+                halved before giving up (the rule's on_error applies)
     cache_size  verdicts remembered by text hash, so a page seen twice is
                 judged once; 0 disables
     """
@@ -131,6 +133,7 @@ class Screener:
         messages: Messages | None = None,
         overlap: int = 200,
         max_chunks: int = 8,
+        max_splits: int = 4,
         cache_size: int = 1024,
     ):
         self.policy = policy
@@ -143,6 +146,7 @@ class Screener:
         self.messages = messages or Messages()
         self.overlap = overlap
         self.max_chunks = max_chunks
+        self.max_splits = max_splits
         self.cache_size = cache_size
         self._cache: OrderedDict[tuple[int, str], Verdict] = OrderedDict()
         self._lock = threading.Lock()
@@ -191,10 +195,22 @@ class Screener:
         if len(pieces) > self.max_chunks:
             return Verdict.failed(detector.name, f"too-large:{len(text)}-chars"), len(pieces)
         if len(pieces) == 1:
-            return self._detect(detector, pieces[0], context), 1
+            return self._judge(detector, pieces[0], context, self.max_splits)
         with ThreadPoolExecutor(max_workers=len(pieces)) as pool:
-            verdicts = list(pool.map(lambda p: self._detect(detector, p, context), pieces))
-        return combine(verdicts), len(pieces)
+            results = list(pool.map(lambda p: self._judge(detector, p, context, self.max_splits), pieces))
+        return combine([v for v, _ in results]), sum(n for _, n in results)
+
+    def _judge(self, detector: Detector, text: str, context: ToolContext, splits_left: int) -> tuple[Verdict, int]:
+        """A verdict for one piece and how many pieces it took: a piece the
+        detector refuses as too long is halved (with overlap) and each half
+        judged, up to `splits_left` times deep."""
+        verdict = self._detect(detector, text, context)
+        if not verdict.too_long or splits_left <= 0 or len(text) < 2:
+            return verdict, 1
+        overlap = min(self.overlap, len(text) // 4)
+        halves = chunk(text, (len(text) + overlap + 1) // 2, overlap)
+        results = [self._judge(detector, half, context, splits_left - 1) for half in halves]
+        return combine([v for v, _ in results]), sum(n for _, n in results)
 
     def _detect(self, detector: Detector, text: str, context: ToolContext) -> Verdict:
         key = (id(detector), _hash(text))

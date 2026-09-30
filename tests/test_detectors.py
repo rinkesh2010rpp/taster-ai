@@ -6,6 +6,7 @@ import pytest
 from conftest import PAGES, FakeDetector, verdict
 
 from taster_ai import CallableDetector, FallbackDetector, HeuristicDetector, JevDetector, Verdict
+from taster_ai.verdict import TOO_LONG
 
 # --- heuristic -----------------------------------------------------------
 
@@ -68,6 +69,12 @@ def test_fallback_chain_uses_first_working_detector():
     assert v.label == "error" and "http-503" in v.error and "timeout" in v.error
 
 
+def test_fallback_passes_too_long_up_instead_of_falling_back():
+    backup = FakeDetector(lambda _t: verdict("clean", 0.99))
+    v = FallbackDetector(FakeDetector(lambda _t: Verdict.failed("fake", TOO_LONG)), backup).safe_detect("x")
+    assert v.too_long and backup.calls == 0
+
+
 def test_fallback_needs_two():
     with pytest.raises(ValueError):
         FallbackDetector(HeuristicDetector())
@@ -115,6 +122,12 @@ def test_jev_request_and_response(monkeypatch):
     "response, error",
     [
         (urllib.error.HTTPError("u", 503, "x", {}, None), "http-503"),
+        (urllib.error.HTTPError("u", 400, "x", {}, io.BytesIO(  # the body OpenRouter returned live, 2026-09-29
+            b'{"error":{"message":"HTTP 400: {\\"detail\\":{\\"error_type\\":\\"max_tokens_exceeded\\"}}","code":400}}'
+        )), TOO_LONG),
+        (urllib.error.HTTPError("u", 422, "x", {}, io.BytesIO(b'{"error":{"message":"State exceeds context length"}}')), TOO_LONG),
+        (urllib.error.HTTPError("u", 400, "x", {}, io.BytesIO(b'{"error":"bad request"}')), "http-400"),
+        (urllib.error.HTTPError("u", 429, "x", {}, io.BytesIO(b'{"error":"too many tokens per minute"}')), "http-429"),
         (urllib.error.URLError("dns"), "url-dns"),
         ({"answers": {"verdict": {"choice": "maybe"}}}, "unexpected-verdict:maybe"),
         ({"nope": 1}, "KeyError"),
