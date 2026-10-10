@@ -2,7 +2,7 @@
 
 **Your agent eats nothing we haven't tasted.**
 
-> Status: early alpha (0.1.0.dev2). APIs may change. Not on PyPI yet.
+> Status: early alpha (0.1.0.dev3). APIs may change. Not on PyPI yet.
 
 ## What it is
 
@@ -61,7 +61,7 @@ What that gives you:
 Not on PyPI yet; install from GitHub, pinned to a release:
 
 ```bash
-pip install "taster-ai[langchain,yaml] @ git+https://github.com/rinkesh2010rpp/taster-ai@v0.1.0.dev2"
+pip install "taster-ai[langchain,yaml] @ git+https://github.com/rinkesh2010rpp/taster-ai@v0.1.0.dev3"
 ```
 
 Requires Python 3.10+ and, for the middleware, LangChain 1.x.
