@@ -122,16 +122,23 @@ or your own LLM as the judge: `detector=ChatOpenAI(model="gpt-4.1-mini", tempera
 
 ### Using deepagents?
 
-deepagents doesn't pass your middleware to its built-in subagent, which also
-reads web pages. Add one line:
+Taster screens the agent you attach it to. deepagents doesn't pass your
+middleware to its built-in subagent, which also reads web pages, so declare
+that subagent and give it Taster too:
 
 ```python
+from deepagents.middleware.subagents import GENERAL_PURPOSE_SUBAGENT
+
 agent = create_deep_agent(
     model=llm, tools=tools,
     middleware=[taster],
-    subagents=taster.subagents(),
+    subagents=[{**GENERAL_PURPOSE_SUBAGENT, "middleware": [taster]}],
 )
 ```
+
+A declared subagent gets the main agent's model and tools but **not** its
+middleware, so list there anything else it should keep (e.g. a customised
+`SummarizationMiddleware`). Your own subagents work the same way.
 
 ### Environment variables
 
@@ -261,15 +268,6 @@ sinks=[]                                       # nothing (default is [log_sink])
 ```
 
 A failing sink is logged and skipped; it never breaks a turn.
-
-### deepagents details
-
-`taster.subagents(inherit=[...])` returns deepagents' stock general-purpose
-subagent with Taster attached. A declared subagent gets the main agent's
-model and tools but **not** its middleware, so list in `inherit` anything it
-should keep (e.g. a customised `SummarizationMiddleware`). For your own
-subagents use `taster.protect([...])`. If you forget, Taster logs a warning the
-first time the agent delegates.
 
 ### Guarantees
 
