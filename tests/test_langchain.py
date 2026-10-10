@@ -2,13 +2,12 @@
 chat model: the main agent searches, then hands a search to the
 general-purpose subagent. Both results carry an injection."""
 
-import logging
-
 import pytest
 
 pytest.importorskip("deepagents")
 
 from deepagents import create_deep_agent  # noqa: E402
+from deepagents.middleware.subagents import GENERAL_PURPOSE_SUBAGENT  # noqa: E402
 from langchain_core.language_models import BaseChatModel  # noqa: E402
 from langchain_core.messages import AIMessage, ToolMessage  # noqa: E402
 from langchain_core.outputs import ChatGeneration, ChatResult  # noqa: E402
@@ -74,22 +73,12 @@ def taster():
 
 def test_main_agent_and_subagent_are_both_screened():
     t = taster()
-    seen = run(middleware=[t], subagents=t.subagents())
+    seen = run(middleware=[t], subagents=[{**GENERAL_PURPOSE_SUBAGENT, "middleware": [t]}])
     for call_id in ("main", "sub"):
         assert "withheld" in seen[call_id] and "ignore your previous" not in seen[call_id]
 
 
-def test_without_subagents_the_gap_is_real_and_we_warn(caplog):
-    t = taster()
-    with caplog.at_level(logging.WARNING, logger="taster_ai"):
-        seen = run(middleware=[t])
+def test_screens_only_the_agent_it_is_attached_to():
+    seen = run(middleware=[taster()])
     assert "withheld" in seen["main"]
-    assert "ignore your previous" in seen["sub"]  # the subagent read it raw
-    assert "subagents are not screened" in caplog.text
-
-
-def test_protect_adds_screen_and_general_purpose():
-    t = taster()
-    specs = t.protect([{"name": "researcher", "description": "d", "system_prompt": "p"}])
-    assert [s["name"] for s in specs] == ["general-purpose", "researcher"]
-    assert all(t in s["middleware"] for s in specs)
+    assert "ignore your previous" in seen["sub"]  # deepagents' subagent has no screen
