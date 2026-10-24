@@ -163,6 +163,7 @@ TasterMiddleware(
     detectors=None,         # extra judges by name, for rules that name one
     sinks=None,             # where records go; default: [log_sink]
     messages=None,          # wording of withheld/wrapped results
+    screener=None,          # or pass a ready Screener instead of the above
 )
 ```
 
@@ -192,6 +193,7 @@ git.
 | `detector` | name of a detector from `detectors={...}`; omit to use the default |
 
 Load from `Policy.from_yaml(path)`, `Policy.from_json(text)`,
+`Policy.from_dict({"rules": [...]})`,
 `Policy.from_env("TASTER_POLICY", default=...)`, or build
 `Policy(rules=[Rule("search_web", mode="enforce"), ...])` in Python. Unknown
 keys are rejected, so a typo can't silently switch checking off.
@@ -223,6 +225,11 @@ TasterMiddleware(policy, detector=JevDetector(), detectors={"strict": my_llm})
 A rule naming a detector you didn't pass fails when the middleware is
 created, not mid-run.
 
+**Jev options:** `JevDetector(api_key=None, timeout=5.0, title="taster-ai",
+referer=None, max_chars=120_000)`. `api_key` defaults to
+`OPENROUTER_API_KEY`; `title` and `referer` are the app name and URL
+OpenRouter shows for your calls; `max_chars` is the chunk size.
+
 **Writing your own detector:** subclass `Detector`, set `name` and
 `max_chars` (the biggest piece it takes), and implement
 `detect(text, context) -> Verdict`. If your model's limit is in tokens and you
@@ -250,7 +257,9 @@ per number of signals. Tune `threshold` for the detector you use.
 | no verdict (detector down) | the result marked "not screened", or withheld with `on_error: block` |
 
 Change the wording with `messages=Messages(withheld="[Blocked by security policy: {tool}]")`.
-Placeholders: `{tool}`, `{confidence}`, `{error}`, `{why}`.
+The fields are `withheld` (flagged as injection), `withheld_unscreened`
+(no verdict, `on_error: block`), and `wrap_header` / `wrap_footer` (around a
+wrapped result). Placeholders: `{tool}`, `{confidence}`, `{error}`, `{why}`.
 
 ### Sinks: where records go
 
