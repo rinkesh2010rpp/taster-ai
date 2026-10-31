@@ -23,6 +23,7 @@ Mode = Literal["pass", "shadow", "enforce"]
 MODES = ("pass", "shadow", "enforce")
 ON_ERROR = ("label", "block")
 UNCLEAR = ("wrap", "withhold", "pass")
+CHECKS = ("injection", "constitution")
 
 
 @dataclass
@@ -43,6 +44,14 @@ class Rule:
                through to later rules.
     detector   name of a detector registered with the screener
                (`detectors={"name": ...}`); None uses the default detector
+    checks     what runs for a matching call: "injection" screens the
+               result after the tool runs; "constitution" checks the call
+               against the screener's constitution before it runs. Default:
+               injection only.
+    constitution_mode
+               mode for the constitution check; None uses `mode`. Lets a
+               rule enforce injection screening while the constitution check
+               is still in shadow. `threshold` and `on_error` apply to both.
     """
 
     tool: str
@@ -52,10 +61,17 @@ class Rule:
     unclear: Literal["wrap", "withhold", "pass"] = "wrap"
     when_args: Mapping[str, str] = field(default_factory=dict)
     detector: str | None = None
+    checks: tuple[str, ...] = ("injection",)
+    constitution_mode: Mode | None = None
 
     def __post_init__(self):
         if self.mode not in MODES:
             raise ValueError(f"rule {self.tool!r}: mode must be one of {MODES}, got {self.mode!r}")
+        self.checks = (self.checks,) if isinstance(self.checks, str) else tuple(self.checks)
+        if not self.checks or set(self.checks) - set(CHECKS):
+            raise ValueError(f"rule {self.tool!r}: checks must be a non-empty list from {CHECKS}")
+        if self.constitution_mode is not None and self.constitution_mode not in MODES:
+            raise ValueError(f"rule {self.tool!r}: constitution_mode must be one of {MODES}")
         if self.on_error not in ON_ERROR:
             raise ValueError(f"rule {self.tool!r}: on_error must be one of {ON_ERROR}")
         if self.unclear not in UNCLEAR:
@@ -71,9 +87,17 @@ class Rule:
             return False
         return all(p.search(str((args or {}).get(arg, ""))) for arg, p in self._arg_patterns.items())
 
+    def mode_for(self, check: str) -> Mode:
+        """The mode `check` runs in: "pass" if the rule doesn't run it."""
+        if check not in self.checks:
+            return "pass"
+        if check == "constitution" and self.constitution_mode is not None:
+            return self.constitution_mode
+        return self.mode
+
 
 PASS = Rule("*", mode="pass")
-_RULE_KEYS = {"tool", "mode", "threshold", "on_error", "unclear", "when_args", "detector"}
+_RULE_KEYS = {"tool", "mode", "threshold", "on_error", "unclear", "when_args", "detector", "checks", "constitution_mode"}
 
 
 @dataclass

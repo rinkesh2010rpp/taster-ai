@@ -162,7 +162,8 @@ TasterMiddleware(
     detector=None,          # who judges; default: HeuristicDetector()
     detectors=None,         # extra judges by name, for rules that name one
     sinks=None,             # where records go; default: [log_sink]
-    messages=None,          # wording of withheld/wrapped results
+    messages=None,          # wording of withheld/wrapped/blocked results
+    constitution=None,      # the owner's rules, for rules with checks: [constitution]
     screener=None,          # or pass a ready Screener instead of the above
 )
 ```
@@ -191,6 +192,8 @@ git.
 | `on_error` | if no verdict can be had: `label` (pass through, marked unscreened) or `block` |
 | `when_args` | `{arg: regex}` — only match calls whose arguments match |
 | `detector` | name of a detector from `detectors={...}`; omit to use the default |
+| `checks` | what runs: `injection` (screen the result, the default), `constitution` (check the call before it runs), or both |
+| `constitution_mode` | mode for the constitution check; omit to use `mode` |
 
 Load from `Policy.from_yaml(path)`, `Policy.from_json(text)`,
 `Policy.from_dict({"rules": [...]})`,
@@ -247,6 +250,51 @@ use a model **other than your agent's** (ideally a small one).
 probability, an LLM's is its own estimate, the heuristic's is a fixed score
 per number of signals. Tune `threshold` for the detector you use.
 
+### The constitution: checking calls, not just results
+
+Injection screening asks whether a tool's *result* is trying to hijack the
+agent. The constitution asks whether a tool *call* breaks the owner's rules,
+whoever suggested it, and runs before the tool does.
+
+```python
+CONSTITUTION = [
+    "Never write secrets, API keys or tokens to files.",
+    "Never send a secret to any host except the one that issued it.",
+    "Never install skills or instruction files from external sources.",
+]
+
+TasterMiddleware(
+    Policy.from_dict({"rules": [
+        {"tool": "search_web", "mode": "enforce", "checks": ["constitution", "injection"],
+         "constitution_mode": "shadow"},
+        {"tool": "*", "mode": "shadow", "checks": ["constitution"]},
+    ]}),
+    detector=JevDetector(),
+    constitution=CONSTITUTION,
+)
+```
+
+Each matching call is described to the judge as its tool name and arguments
+(long arguments keep their start and end) and judged on its own. The answer
+is `follows`, `violates` or `unclear`:
+
+| Verdict | In enforce mode |
+|---|---|
+| follows, unclear, or violates below the threshold | the tool runs |
+| violates at or above the threshold | the tool is **not run**; the agent gets `[write_file was not run: it breaks your owner's constitution (confidence 0.94). Find another way that follows the rules.]` |
+| no verdict (judge down) | the tool runs, or is not run with `on_error: block` |
+
+The judge is Jev asked the constitution question by default
+(`Constitution(rules, timeout=2, ...)` passes Jev options). Pass
+`constitution=Constitution(rules, my_chat_model)` to use your own model.
+Records have `"stage": "call"` (results have `"stage": "result"`) and a hash
+of the call, never its arguments.
+
+Taster only checks. Telling the agent its rules (in its system prompt) is up
+to whoever builds the agent. Keep the rules where the agent can't edit them,
+as with the policy. Each call costs one judge call, so start in shadow and
+skip harmless tools if that's too slow.
+
 ### What the model sees
 
 | Verdict | In enforce mode |
@@ -258,8 +306,9 @@ per number of signals. Tune `threshold` for the detector you use.
 
 Change the wording with `messages=Messages(withheld="[Blocked by security policy: {tool}]")`.
 The fields are `withheld` (flagged as injection), `withheld_unscreened`
-(no verdict, `on_error: block`), and `wrap_header` / `wrap_footer` (around a
-wrapped result). Placeholders: `{tool}`, `{confidence}`, `{error}`, `{why}`.
+(no verdict, `on_error: block`), `wrap_header` / `wrap_footer` (around a
+wrapped result), and `blocked` / `blocked_unchecked` (a call the constitution
+stopped). Placeholders: `{tool}`, `{confidence}`, `{error}`, `{why}`.
 
 ### Sinks: where records go
 

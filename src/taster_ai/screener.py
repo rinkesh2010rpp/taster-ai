@@ -1,7 +1,8 @@
 """The engine: rule lookup, chunking, detection, combining, deciding, logging.
 
-Framework adapters (LangChain, ...) call `Screener.screen` with a tool's name,
-arguments and result text, then `render` the returned decision.
+Framework adapters (LangChain, ...) call `Screener.check` with a tool's name
+and arguments before it runs (and skip the tool if the check blocks it), then
+`Screener.screen` with its result text, and `render` the returned decision.
 """
 
 from __future__ import annotations
@@ -16,6 +17,8 @@ from dataclasses import dataclass
 from typing import Any, Iterable, Mapping
 
 from .actions import Action, Messages, decide, render
+from .constitution import LABELS as CONSTITUTION_LABELS
+from .constitution import Constitution
 from .detectors import Detector, HeuristicDetector, as_detector
 from .policy import Policy, Rule
 from .sinks import Sink, log_sink
@@ -49,6 +52,7 @@ class Decision:
         """A log-friendly dict. Holds a hash of the text, never the text."""
         v = self.verdict
         return {
+            "stage": "result",
             "tool": self.tool,
             "tool_call_id": self.tool_call_id,
             "rule": self.rule.tool,
@@ -66,6 +70,69 @@ class Decision:
             "latency_s": round(self.latency_s, 3),
             "input_hash": self.input_hash,
         }
+
+
+@dataclass(frozen=True)
+class CallDecision:
+    """The outcome of checking one tool call against the constitution."""
+
+    tool: str
+    tool_call_id: str | None
+    rule: Rule
+    mode: str
+    verdict: Verdict
+    #: "blocked" means the tool must not run (only ever in enforce mode).
+    action: str
+    #: What enforce mode would do; equals `action` in enforce mode.
+    would_action: str
+    chars: int
+    input_hash: str
+    latency_s: float
+
+    @property
+    def blocked(self) -> bool:
+        return self.action == "blocked"
+
+    def message(self, messages: Messages | None = None) -> str:
+        """What the agent is told in place of the tool's result when blocked."""
+        m = messages or Messages()
+        v = self.verdict
+        if not v.ok:
+            return m.blocked_unchecked.format(tool=self.tool, error=v.error)
+        why = f" {v.evidence[0]}" if v.evidence else ""
+        return m.blocked.format(tool=self.tool, confidence=v.confidence, why=why)
+
+    def record(self) -> dict[str, Any]:
+        """A log-friendly dict. Holds a hash of the call, never its arguments."""
+        v = self.verdict
+        return {
+            "stage": "call",
+            "tool": self.tool,
+            "tool_call_id": self.tool_call_id,
+            "rule": self.rule.tool,
+            "mode": self.mode,
+            "label": CONSTITUTION_LABELS.get(v.label, v.label),
+            "confidence": round(v.confidence, 4),
+            "scores": {CONSTITUTION_LABELS.get(k, k): s for k, s in v.scores.items()},
+            "detector": v.detector,
+            "error": v.error,
+            "evidence": list(v.evidence),
+            "action": self.action,
+            "would_action": self.would_action,
+            "chars": self.chars,
+            "latency_s": round(self.latency_s, 3),
+            "input_hash": self.input_hash,
+        }
+
+
+def decide_call(rule: Rule, verdict: Verdict) -> str:
+    """What enforce mode does with a constitution verdict: block a confident
+    violation, or a failed check when the rule says on_error="block"."""
+    if not verdict.ok:
+        return "blocked" if rule.on_error == "block" else "passed"
+    if verdict.label == "injection" and verdict.confidence >= rule.threshold:
+        return "blocked"
+    return "passed"
 
 
 def combine(verdicts: list[Verdict]) -> Verdict:
@@ -121,6 +188,10 @@ class Screener:
                 halved before giving up (the rule's on_error applies)
     cache_size  verdicts remembered by text hash, so a page seen twice is
                 judged once; 0 disables
+    constitution
+                the owner's rules (a Constitution, or a list of rule
+                sentences judged by Jev) for rules with
+                checks=["constitution", ...]
     """
 
     def __init__(
@@ -135,6 +206,7 @@ class Screener:
         max_chunks: int = 8,
         max_splits: int = 4,
         cache_size: int = 1024,
+        constitution: Constitution | Iterable[str] | None = None,
     ):
         self.policy = policy
         self.detector = as_detector(detector) if detector is not None else HeuristicDetector()
@@ -142,6 +214,11 @@ class Screener:
         missing = sorted({r.detector for r in policy.rules if r.mode != "pass" and r.detector} - set(self.detectors))
         if missing:
             raise ValueError(f"rules name detectors that weren't given: {missing}; pass detectors={{name: ...}}")
+        if constitution is not None and not isinstance(constitution, Constitution):
+            constitution = Constitution(constitution)
+        self.constitution = constitution
+        if constitution is None and any(r.mode_for("constitution") != "pass" for r in policy.rules):
+            raise ValueError('rules run checks=["constitution"] but no constitution was given')
         self.sinks = [log_sink] if sinks is None else list(sinks)
         self.messages = messages or Messages()
         self.overlap = overlap
@@ -165,7 +242,7 @@ class Screener:
         "pass" rule, or empty text). Never raises."""
         args = args or {}
         rule = self.policy.rule_for(tool, args)
-        if rule.mode == "pass" or not text.strip():
+        if rule.mode_for("injection") == "pass" or not text.strip():
             return None
         started = time.perf_counter()
         try:
@@ -183,6 +260,43 @@ class Screener:
             would_action=would,
             chars=len(text),
             chunks=chunks,
+            input_hash=_hash(text),
+            latency_s=time.perf_counter() - started,
+        )
+        self._emit(decision)
+        return decision
+
+    def check(
+        self,
+        tool: str,
+        args: Mapping[str, Any] | None,
+        tool_call_id: str | None = None,
+    ) -> CallDecision | None:
+        """Check one tool call against the constitution before it runs.
+        Returns None when the rule doesn't run this check. Never raises."""
+        args = args or {}
+        rule = self.policy.rule_for(tool, args)
+        mode = rule.mode_for("constitution")
+        if mode == "pass" or self.constitution is None:
+            return None
+        started = time.perf_counter()
+        text = ""
+        try:
+            text = self.constitution.describe(tool, args)
+            verdict = self._detect(self.constitution.judge, text, ToolContext(tool, args, tool_call_id))
+        except Exception as e:  # a bug here must not break the turn; on_error decides
+            logger.exception("taster: constitution check failed for %s", tool)
+            verdict = Verdict.failed("taster", f"internal-{type(e).__name__}")
+        would = decide_call(rule, verdict)
+        decision = CallDecision(
+            tool=tool,
+            tool_call_id=tool_call_id,
+            rule=rule,
+            mode=mode,
+            verdict=verdict,
+            action=would if mode == "enforce" else "passed",
+            would_action=would,
+            chars=len(text),
             input_hash=_hash(text),
             latency_s=time.perf_counter() - started,
         )
@@ -227,7 +341,7 @@ class Screener:
                     self._cache.popitem(last=False)
         return verdict
 
-    def _emit(self, decision: Decision) -> None:
+    def _emit(self, decision: Decision | CallDecision) -> None:
         record = decision.record()
         for sink in self.sinks:
             try:

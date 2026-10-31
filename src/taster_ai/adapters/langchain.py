@@ -12,6 +12,10 @@
 
 The middleware screens the agent it is attached to. To screen a subagent,
 add it to that subagent's middleware too.
+
+With `constitution=[...]` and rules that say checks=["constitution"], each
+matching call is also checked against the owner's rules before it runs; in
+enforce mode a violating call is not run and the agent is told why.
 """
 
 from __future__ import annotations
@@ -29,7 +33,8 @@ from ..sinks import Sink
 
 
 class TasterMiddleware(AgentMiddleware):
-    """Screens every tool result before the model sees it."""
+    """Checks every tool call before it runs and screens every tool result
+    before the model sees it, as the policy says."""
 
     def __init__(
         self,
@@ -38,24 +43,47 @@ class TasterMiddleware(AgentMiddleware):
         *,
         detectors: Mapping[str, Any] | None = None,
         sinks: Iterable[Sink] | None = None,
+        constitution: Any = None,
         screener: Screener | None = None,
         **screener_options: Any,
     ):
-        """policy, detector, detectors, sinks and any other options are
-        passed to Screener (see there); or pass a ready `screener`."""
+        """policy, detector, detectors, sinks, constitution and any other
+        options are passed to Screener (see there); or pass a ready
+        `screener`."""
         super().__init__()
         if screener is None:
             if policy is None:
                 raise ValueError("pass a policy (or a ready screener)")
-            screener = Screener(policy, detector, detectors=detectors, sinks=sinks, **screener_options)
+            screener = Screener(
+                policy, detector, detectors=detectors, sinks=sinks, constitution=constitution, **screener_options
+            )
         self.screener = screener
 
     def wrap_tool_call(self, request, handler):
+        blocked = self._check(request.tool_call)
+        if blocked is not None:
+            return blocked
         return self._apply(request.tool_call, handler(request))
 
     async def awrap_tool_call(self, request, handler):
+        blocked = await asyncio.to_thread(self._check, request.tool_call)
+        if blocked is not None:
+            return blocked
         result = await handler(request)
         return await asyncio.to_thread(self._apply, request.tool_call, result)
+
+    def _check(self, tool_call: dict) -> ToolMessage | None:
+        """The message that replaces a blocked call's result, or None to run it."""
+        name = tool_call.get("name", "")
+        decision = self.screener.check(name, tool_call.get("args") or {}, tool_call.get("id"))
+        if decision is None or not decision.blocked:
+            return None
+        return ToolMessage(
+            content=decision.message(self.screener.messages),
+            tool_call_id=tool_call.get("id") or "",
+            name=name,
+            status="error",
+        )
 
     def _apply(self, tool_call: dict, result: Any) -> Any:
         name = tool_call.get("name", "")

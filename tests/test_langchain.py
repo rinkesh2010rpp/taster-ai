@@ -82,3 +82,55 @@ def test_screens_only_the_agent_it_is_attached_to():
     seen = run(middleware=[taster()])
     assert "withheld" in seen["main"]
     assert "ignore your previous" in seen["sub"]  # deepagents' subagent has no screen
+
+
+RAN: list = []  # queries search_web actually ran with
+
+
+@tool
+def counted_search(query: str) -> str:
+    """Search the web."""
+    RAN.append(query)
+    return f"results for {query}"
+
+
+def run_constitution(mode: str):
+    from conftest import FakeDetector, verdict
+
+    RAN.clear()
+    shown = {}
+
+    class Model(ScriptedModel):
+        def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+            for m in messages:
+                if isinstance(m, ToolMessage):
+                    shown[m.tool_call_id] = m.content
+            return super()._generate(messages, stop, run_manager, **kwargs)
+
+    judge = FakeDetector(lambda t: verdict("injection" if "secret" in t else "clean", 0.95))
+    t = TasterMiddleware(
+        Policy(rules=[Rule("*", mode=mode, checks=["constitution"])]), constitution=["No secrets."], sinks=[]
+    )
+    t.screener.constitution.judge = judge
+    model = Model(
+        script=[
+            AIMessage("", tool_calls=[{"name": "counted_search", "args": {"query": "secret"}, "id": "bad"}]),
+            AIMessage("", tool_calls=[{"name": "counted_search", "args": {"query": "weather"}, "id": "ok"}]),
+            AIMessage("done"),
+        ],
+    )
+    create_deep_agent(model=model, tools=[counted_search], middleware=[t]).invoke(
+        {"messages": [{"role": "user", "content": "go"}]}
+    )
+    return list(RAN), shown
+
+
+def test_enforce_skips_a_violating_call_and_tells_the_agent():
+    ran, shown = run_constitution("enforce")
+    assert ran == ["weather"]
+    assert "was not run" in shown["bad"] and shown["ok"] == "results for weather"
+
+
+def test_shadow_runs_every_call():
+    ran, shown = run_constitution("shadow")
+    assert ran == ["secret", "weather"] and shown["bad"] == "results for secret"
