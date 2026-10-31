@@ -312,7 +312,6 @@ own scope or constitution can be talked into switching them off.
 | `JevDetector()` | [Jev](https://openrouter.ai) decision model via OpenRouter; calibrated probabilities; up to 120,000 characters per check | ~0.2–0.4 s per check |
 | your chat model | any LangChain chat model, wrapped in `LLMDetector` automatically | your model's price and speed |
 | `FallbackDetector(a, b, …)` | try each in order; the first that answers wins | — |
-| `CallableDetector(fn)` | any function `(text, standard) -> (label, confidence)` | yours |
 
 Different tools can use different judges within one check:
 

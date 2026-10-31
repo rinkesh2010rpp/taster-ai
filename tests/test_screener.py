@@ -204,7 +204,7 @@ def test_unknown_detector_name_fails_at_setup(fake):
 
 
 def test_checks_reject_non_judges():
-    with pytest.raises(TypeError, match="CallableDetector"):
+    with pytest.raises(TypeError, match="subclass Detector"):
         Injection(judge=lambda text: ("follows", 1.0))
 
 

@@ -1,11 +1,11 @@
-"""The judge interface, a judge chain, and a wrapper for plain functions."""
+"""The judge interface and a judge chain."""
 
 from __future__ import annotations
 
 import time
 from abc import ABC, abstractmethod
 from dataclasses import replace
-from typing import Any, Callable
+from typing import Any
 
 from ..verdict import LABELS, TOO_LONG, Verdict
 
@@ -86,20 +86,3 @@ class FallbackDetector(Detector):
                 return verdict
             errors.append(f"{detector.name} {verdict.error}")
         return Verdict.failed(self.name, "; ".join(errors))
-
-
-class CallableDetector(Detector):
-    """Wrap any function `(text, standard) -> (label, confidence)` as a
-    judge, for in-house models or SDKs Taster has no adapter for.
-
-        CallableDetector(lambda text, standard: my_classifier(text, standard), name="in-house")
-    """
-
-    def __init__(self, fn: Callable[[str, str], tuple[str, float]], *, name: str = "callable", max_chars: int = 8000):
-        self.fn = fn
-        self.name = name
-        self.max_chars = max_chars
-
-    def detect(self, text: str, standard: str) -> Verdict:
-        label, confidence = self.fn(text, standard)
-        return Verdict(label, float(confidence), {label: float(confidence)}, self.name)  # type: ignore[arg-type]
