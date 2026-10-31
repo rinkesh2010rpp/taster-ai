@@ -29,7 +29,7 @@ from .checks import Check, Injection, call_pieces
 from .detectors import Detector, HeuristicDetector
 from .policy import Policy, Scope, Target
 from .sinks import Sink, log_sink
-from .verdict import ToolContext, Verdict
+from .verdict import TOO_LARGE, ToolContext, Verdict
 
 logger = logging.getLogger("taster_ai")
 
@@ -118,9 +118,12 @@ class Outcome:
         for n, d in enumerate(self.failed, 1):
             v = d.verdict
             fields = {"n": n, "check": d.check.name, "confidence": v.confidence, "error": v.error}
-            lines.append(
-                m.failure.format(why=d.check.reason(v), **fields) if v.ok else m.unchecked.format(why="", **fields)
-            )
+            if v.ok:
+                lines.append(m.failure.format(why=d.check.reason(v), **fields))
+            elif v.oversized and self.stage == "tool_call":
+                lines.append(m.too_large.format(why="", **fields))
+            else:
+                lines.append(m.unchecked.format(why="", **fields))
         return "\n".join(lines)
 
     def message(self, messages: Messages | None = None) -> str:
@@ -320,7 +323,7 @@ class Screener:
     def _verdict(self, detector: Detector, text: str, context: ToolContext) -> tuple[Verdict, int]:
         pieces = chunk(text, detector.max_chars, min(self.overlap, detector.max_chars // 2))
         if len(pieces) > self.max_chunks:
-            return Verdict.failed(detector.name, f"too-large:{len(text)}-chars"), len(pieces)
+            return Verdict.failed(detector.name, f"{TOO_LARGE}:{len(text)}-chars"), len(pieces)
         results = self._each(pieces, lambda p: self._judge(detector, p, context, self.max_splits))
         return combine([v for v, _ in results]), sum(n for _, n in results)
 
@@ -332,7 +335,7 @@ class Screener:
         for splits_left in range(self.max_splits, -1, -1):
             pieces = call_pieces(context.tool, context.args, size, min(self.overlap, size // 4))
             if len(pieces) > self.max_chunks:
-                return Verdict.failed(detector.name, f"too-large:{len(pieces)}-pieces"), len(pieces)
+                return Verdict.failed(detector.name, f"{TOO_LARGE}:{len(pieces)}-pieces"), len(pieces)
             verdicts = self._each(pieces, lambda p: self._detect(detector, p, context))
             if not any(v.too_long for v in verdicts) or splits_left == 0 or size < 400:
                 return combine(verdicts), len(pieces)

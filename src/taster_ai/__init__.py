@@ -14,7 +14,7 @@ from .detectors import CallableDetector, Detector, FallbackDetector, HeuristicDe
 from .policy import Policy, Rule, Scope, Target
 from .screener import Decision, Outcome, Screener
 from .sinks import BackgroundSink, JsonlSink, log_sink, print_sink
-from .verdict import TOO_LONG, ToolContext, Verdict
+from .verdict import TOO_LARGE, TOO_LONG, ToolContext, Verdict
 
 __version__ = "0.1.0.dev3"
 
@@ -37,6 +37,7 @@ __all__ = [
     "Rule",
     "Scope",
     "Screener",
+    "TOO_LARGE",
     "TOO_LONG",
     "Target",
     "ToolContext",

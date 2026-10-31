@@ -11,6 +11,9 @@ LABELS: tuple[str, ...] = ("clean", "injection", "unclear", "error")
 #: The `error` of a detector that refused text as too long for it. The
 #: screener then splits the text in half and asks again.
 TOO_LONG = "too-long"
+#: The start of the `error` for text needing more pieces than the screener
+#: allows (`max_chunks`).
+TOO_LARGE = "too-large"
 
 
 @dataclass(frozen=True)
@@ -37,6 +40,11 @@ class Verdict:
     @property
     def too_long(self) -> bool:
         return self.error == TOO_LONG
+
+    @property
+    def oversized(self) -> bool:
+        """Failed because of the input's size, which whoever wrote it controls."""
+        return self.too_long or (self.error or "").startswith(TOO_LARGE)
 
     @classmethod
     def failed(cls, detector: str, error: str, latency_s: float = 0.0) -> Verdict:

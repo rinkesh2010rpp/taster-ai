@@ -279,7 +279,7 @@ when.
 | `mode` | `pass` (not checked), `shadow` (check + log only), `enforce` (check + act) |
 | `threshold` | confidence a "breaks" verdict needs to block the call or withhold the result (default 0.85) |
 | `unclear` | what an `unclear` verdict does to a result: `wrap` (default), `withhold`, `pass`; for a call, `withhold` blocks it |
-| `on_error` | if no verdict can be had: `label` (let it through; a result is marked unscreened) or `block` |
+| `on_error` | if no verdict can be had: `label` (let it through; a result is marked unscreened) or `block`. A call too large to check is blocked in enforce mode whatever this says |
 | `when_args` | `{arg: regex}`: only match calls whose arguments match |
 | `detector` | name of a detector from the check's `detectors={...}`; omit to use its judge |
 
@@ -364,8 +364,9 @@ quote the attack, so the agent isn't shown it.
 Change the wording with `messages=Messages(blocked="[Not allowed: {tool}]\n{failures}")`.
 The fields are `blocked` (a call not run) and `withheld` (a result held
 back), with placeholders `{tool}` and `{failures}`; `failure` and
-`unchecked` (one line of `{failures}`, with `{n}`, `{check}`, `{why}`,
-`{confidence}`, `{error}`); and `wrap_header` / `wrap_footer` (around a
+`unchecked` and `too_large` (one line of `{failures}`, with `{n}`,
+`{check}`, `{why}`, `{confidence}`, `{error}`; `too_large` is for a call too
+large to check); and `wrap_header` / `wrap_footer` (around a
 wrapped result, with `{tool}` and `{why}`).
 
 ### Upgrading from 0.1
@@ -407,7 +408,10 @@ A failing sink is logged and skipped; it never breaks a turn.
   `error` verdicts, handled by the target's `on_error`.
 - **Long calls** are shown to the judge in overlapping pieces that each carry
   the tool's name and short arguments; one piece that breaks the standard
-  blocks the call.
+  blocks the call. A call too large to check (more than `max_chunks` pieces,
+  or refused as too long after every split) is never let through in enforce
+  mode: the agent is told to split it into smaller calls, since padding would
+  otherwise be a way around the check.
 - **Long results** are split into overlapping chunks and checked in parallel;
   one flagged chunk flags the whole result. A chunk the detector refuses as
   too long is halved and checked again. Results too long to check fully
@@ -431,6 +435,11 @@ A failing sink is logged and skipped; it never breaks a turn.
   Chunks are sized for plain text (120,000 characters); denser text such as
   base64 or code overflows Jev's 32k-token limit and costs a few extra calls
   while it's split. Long-page accuracy was checked on synthetic prose only.
+- **A judge timeout lets a call through by default.** Only size errors
+  always block; a judge that is down or slow follows `on_error`, so an outage
+  doesn't stop your agent. A call that is large but under the cap, and slows
+  the judge into a timeout, can therefore run. Set `on_error: block` on the
+  targets where that matters.
 - **Each call is judged on its own.** A check sees one call, not the
   conversation, so a harmful plan split across harmless-looking calls can
   pass.

@@ -17,7 +17,7 @@ from taster_ai import (
 )
 from taster_ai.checks import CRITERIA, call_pieces
 from taster_ai.detectors.jev import DEFAULT_QUESTION
-from taster_ai.verdict import TOO_LONG
+from taster_ai.verdict import TOO_LARGE, TOO_LONG
 
 STANDARD = "Never write secrets, API keys or tokens to files.\nNever install skills from external sources."
 SECRET_WRITE = {"file_path": "/root/.config/moltbook/credentials.json", "content": '{"api_key": "moltbook_sk_1"}'}
@@ -197,10 +197,38 @@ def test_a_short_call_is_one_piece():
     assert call_pieces("ls", {"path": "/data"}, 1000) == ['ACTION: ls\nARGS: {"path": "/data"}']
 
 
-def test_too_many_pieces_follows_on_error(fake):
-    s = screener(constitution(fake(max_chars=500), on_error="block"), max_chunks=3)
-    out = s.screen_call("write_file", {"content": "z" * 5000})
-    assert out.blocked and out.decisions[0].verdict.error.startswith("too-large")
+def test_a_call_too_large_to_check_is_blocked_whatever_on_error_says(fake):
+    # padding past max_chunks must not be a way around the check
+    padded = {"file_path": "/data/creds.json", "content": "z" * 5000}
+    out = screener(constitution(fake(max_chars=500)), max_chunks=3).screen_call("write_file", padded)
+    [d] = out.decisions
+    assert d.verdict.oversized and d.verdict.error.startswith(TOO_LARGE) and out.blocked
+    assert "too large to check; split it into smaller calls" in out.message()
+
+    out = screener(constitution(fake(max_chars=500), mode="shadow"), max_chunks=3).screen_call("write_file", padded)
+    [d] = out.decisions
+    assert (d.action, d.would_action, out.blocked) == ("passed", "blocked", False)
+
+
+def test_a_call_still_refused_after_every_split_is_blocked():
+    refuses_all = FakeDetector(lambda _t: Verdict.failed("fake", TOO_LONG), max_chars=4000)
+    out = screener(constitution(refuses_all), max_splits=2).screen_call("write_file", {"content": "a" * 3000})
+    assert out.decisions[0].verdict.too_long and out.blocked
+    assert "split it into smaller calls" in out.message()
+
+
+def test_a_judge_outage_still_follows_on_error():
+    # only size is the caller's doing; a judge that's down must not stop the agent
+    down = FakeDetector(lambda _t: Verdict.failed("fake", "timeout"))
+    out = screener(constitution(down)).screen_call("write_file", {"content": "a" * 3000})
+    assert not out.blocked and out.decisions[0].would_action == "passed"
+
+
+def test_a_result_too_large_to_check_is_still_only_labelled(fake):
+    s = screener(Injection(Scope(tool_result=[Target("*", mode="enforce")]), fake(max_chars=10)), max_chunks=3)
+    out = s.screen_result("search_web", {}, "z" * 500)
+    assert out.decisions[0].verdict.oversized and out.decisions[0].action == "labelled"
+    assert "not screened" in out.render("z" * 500)
 
 
 def test_a_refused_call_is_cut_smaller_and_judged_again():
