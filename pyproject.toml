@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "taster-ai"
-version = "0.1.0.dev3"
-description = "Antivirus for your AI agent: screens every tool result for prompt injection before your agent reads it."
+version = "0.2.0.dev0"
+description = "Checks for autonomous AI agents: screens tool results for prompt injection and checks tool calls against your rules before they run."
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.10"
 authors = [{ name = "Rinkesh" }]
-keywords = ["ai-agents", "prompt-injection", "llm-security", "langchain", "deepagents", "guardrails"]
+keywords = ["ai-agents", "autonomous-agents", "prompt-injection", "llm-security", "guardrails", "constitution", "langchain", "deepagents"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
