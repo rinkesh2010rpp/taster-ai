@@ -5,8 +5,9 @@ override phrases, fake system/owner messages, text addressed to "the AI
 reading this", requests to hide things from the user or send secrets,
 directives hidden in HTML comments, and invisible Unicode tag characters.
 
-It is a baseline and a fallback, not a replacement for a model-based
-detector: it misses paraphrased attacks, and its judgment of one pattern on
+It only knows prompt injection: it ignores the standard it is given, so use
+it in an Injection check (as a fallback, say), not to judge your own
+standards. It is a baseline, not a replacement for a model-based judge: it misses paraphrased attacks, and its judgment of one pattern on
 its own is only "unclear". Text inside double quotes is ignored, so an
 article that *quotes* "ignore all previous instructions" isn't flagged.
 """
@@ -15,7 +16,7 @@ from __future__ import annotations
 
 import re
 
-from ..verdict import ToolContext, Verdict
+from ..verdict import Verdict
 from .base import Detector
 
 _I = re.IGNORECASE
@@ -67,12 +68,13 @@ def _hits(text: str) -> set[str]:
 
 
 class HeuristicDetector(Detector):
-    """Pattern-based detector: 0 signals -> clean, 1 -> unclear, 2+ -> injection."""
+    """Pattern-based injection judge: 0 signals -> follows, 1 -> unclear, 2+ ->
+    breaks. Ignores the standard."""
 
     name = "heuristic"
     max_chars = 200_000  # no model behind it, so no need to chunk
 
-    def detect(self, text: str, context: ToolContext | None = None) -> Verdict:
+    def detect(self, text: str, standard: str | None = None) -> Verdict:
         unquoted = _QUOTED.sub(" ", text)
         hits = _hits(unquoted)
         if any(_hits(comment) for comment in _HTML_COMMENT.findall(unquoted)):
@@ -86,13 +88,13 @@ class HeuristicDetector(Detector):
 
         signals = len(hits) + strong
         if signals == 0:
-            label, confidence = "clean", 0.6
+            label, confidence = "follows", 0.6
         elif signals == 1:
             label, confidence = "unclear", 0.6
         elif signals == 2:
-            label, confidence = "injection", 0.9
+            label, confidence = "breaks", 0.9
         else:
-            label, confidence = "injection", 0.97
+            label, confidence = "breaks", 0.97
         rest = (1 - confidence) / 2
-        scores = {k: (confidence if k == label else rest) for k in ("clean", "unclear", "injection")}
+        scores = {k: (confidence if k == label else rest) for k in ("follows", "unclear", "breaks")}
         return Verdict(label, confidence, scores, self.name, evidence=tuple(sorted(hits)))  # type: ignore[arg-type]

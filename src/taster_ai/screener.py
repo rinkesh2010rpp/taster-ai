@@ -7,7 +7,8 @@ the returned outcome.
 
 For each check whose scope has the stage, the first matching target picks
 the mode; the text is split into pieces the judge can take, each piece is
-judged (in parallel, cached), and the most suspicious verdict wins. Checks
+judged against the check's standard (in parallel, cached by judge, standard
+and text), and the most suspicious verdict wins. Checks
 never affect each other: a call or result is blocked if any check in
 enforce mode blocks it, and the agent is told every check that did.
 """
@@ -72,7 +73,7 @@ class Decision:
 
     def record(self) -> dict[str, Any]:
         """A log-friendly dict. Holds a hash of the text, never the text."""
-        v, labels = self.verdict, self.check.labels
+        v = self.verdict
         return {
             "check": self.check.name,
             "stage": self.stage,
@@ -80,9 +81,9 @@ class Decision:
             "tool_call_id": self.tool_call_id,
             "target": self.target.tool,
             "mode": self.target.mode,
-            "label": labels.get(v.label, v.label),
+            "label": v.label,
             "confidence": round(v.confidence, 4),
-            "scores": {labels.get(k, k): s for k, s in v.scores.items()},
+            "scores": dict(v.scores),
             "detector": v.detector,
             "error": v.error,
             "evidence": list(v.evidence),
@@ -142,8 +143,7 @@ class Outcome:
         if not marked:
             return None
         why = "; ".join(
-            f"{d.check.name}: {d.check.labels.get(d.verdict.label, d.verdict.label)}, "
-            f"confidence {d.verdict.confidence:.2f}"
+            f"{d.check.name}: {d.verdict.label}, confidence {d.verdict.confidence:.2f}"
             if d.verdict.ok
             else f"{d.check.name}: not screened: {d.verdict.error}"
             for d in marked
@@ -161,7 +161,7 @@ def combine(verdicts: list[Verdict]) -> Verdict:
     unchecked; otherwise any unclear piece makes it unclear; otherwise it's
     clean."""
     ok = [v for v in verdicts if v.ok]
-    flagged = [v for v in ok if v.label == "injection"]
+    flagged = [v for v in ok if v.label == "breaks"]
     if flagged:
         return max(flagged, key=lambda v: v.confidence)
     if len(ok) < len(verdicts):
@@ -207,8 +207,8 @@ class Screener:
                 (the target's on_error applies) rather than half-checked
     max_splits  how many times text the judge refuses as too long is cut
                 smaller before giving up (the target's on_error applies)
-    cache_size  verdicts remembered by text hash, so a page seen twice is
-                judged once; 0 disables
+    cache_size  verdicts remembered by judge, standard and text hash, so a
+                page seen twice is judged once; 0 disables
     """
 
     def __init__(
@@ -244,7 +244,7 @@ class Screener:
         self.max_chunks = max_chunks
         self.max_splits = max_splits
         self.cache_size = cache_size
-        self._cache: OrderedDict[tuple[int, str], Verdict] = OrderedDict()
+        self._cache: OrderedDict[tuple[int, str, str], Verdict] = OrderedDict()
         self._lock = threading.Lock()
 
     def screen_call(
@@ -296,11 +296,11 @@ class Screener:
         if stage == "tool_call":
             text = f"{context.tool} {json.dumps(dict(context.args), ensure_ascii=False, default=str)}"
         try:
-            judge = check.judge_for(stage, target)
+            judge = check.judge_for(target)
             if stage == "tool_call":
-                verdict, chunks = self._call_verdict(judge, context)
+                verdict, chunks = self._call_verdict(judge, context, check.standard)
             else:
-                verdict, chunks = self._verdict(judge, text, context)
+                verdict, chunks = self._verdict(judge, text, check.standard)
         except Exception as e:  # a bug here must not break the turn; on_error decides
             logger.exception("taster: check %s failed for %s", check.name, context.tool)
             verdict, chunks = Verdict.failed("taster", f"internal-{type(e).__name__}"), 0
@@ -320,14 +320,14 @@ class Screener:
             latency_s=time.perf_counter() - started,
         )
 
-    def _verdict(self, detector: Detector, text: str, context: ToolContext) -> tuple[Verdict, int]:
+    def _verdict(self, detector: Detector, text: str, standard: str) -> tuple[Verdict, int]:
         pieces = chunk(text, detector.max_chars, min(self.overlap, detector.max_chars // 2))
         if len(pieces) > self.max_chunks:
             return Verdict.failed(detector.name, f"{TOO_LARGE}:{len(text)}-chars"), len(pieces)
-        results = self._each(pieces, lambda p: self._judge(detector, p, context, self.max_splits))
+        results = self._each(pieces, lambda p: self._judge(detector, p, standard, self.max_splits))
         return combine([v for v, _ in results]), sum(n for _, n in results)
 
-    def _call_verdict(self, detector: Detector, context: ToolContext) -> tuple[Verdict, int]:
+    def _call_verdict(self, detector: Detector, context: ToolContext, standard: str) -> tuple[Verdict, int]:
         """Judge a call in pieces that each carry the tool's name and short
         arguments; if the judge refuses a piece as too long, cut the pieces
         smaller and judge again, up to max_splits times."""
@@ -336,7 +336,7 @@ class Screener:
             pieces = call_pieces(context.tool, context.args, size, min(self.overlap, size // 4))
             if len(pieces) > self.max_chunks:
                 return Verdict.failed(detector.name, f"{TOO_LARGE}:{len(pieces)}-pieces"), len(pieces)
-            verdicts = self._each(pieces, lambda p: self._detect(detector, p, context))
+            verdicts = self._each(pieces, lambda p: self._detect(detector, p, standard))
             if not any(v.too_long for v in verdicts) or splits_left == 0 or size < 400:
                 return combine(verdicts), len(pieces)
             size //= 2
@@ -348,26 +348,26 @@ class Screener:
         with ThreadPoolExecutor(max_workers=len(pieces)) as pool:
             return list(pool.map(fn, pieces))
 
-    def _judge(self, detector: Detector, text: str, context: ToolContext, splits_left: int) -> tuple[Verdict, int]:
+    def _judge(self, detector: Detector, text: str, standard: str, splits_left: int) -> tuple[Verdict, int]:
         """A verdict for one piece and how many pieces it took: a piece the
         detector refuses as too long is halved (with overlap) and each half
         judged, up to `splits_left` times deep."""
-        verdict = self._detect(detector, text, context)
+        verdict = self._detect(detector, text, standard)
         if not verdict.too_long or splits_left <= 0 or len(text) < 2:
             return verdict, 1
         overlap = min(self.overlap, len(text) // 4)
         halves = chunk(text, (len(text) + overlap + 1) // 2, overlap)
-        results = [self._judge(detector, half, context, splits_left - 1) for half in halves]
+        results = [self._judge(detector, half, standard, splits_left - 1) for half in halves]
         return combine([v for v, _ in results]), sum(n for _, n in results)
 
-    def _detect(self, detector: Detector, text: str, context: ToolContext) -> Verdict:
-        key = (id(detector), _hash(text))
+    def _detect(self, detector: Detector, text: str, standard: str) -> Verdict:
+        key = (id(detector), _hash(standard), _hash(text))
         if self.cache_size:
             with self._lock:
                 if key in self._cache:
                     self._cache.move_to_end(key)
                     return self._cache[key]
-        verdict = detector.safe_detect(text, context)
+        verdict = detector.safe_detect(text, standard)
         if verdict.ok and self.cache_size:
             with self._lock:
                 self._cache[key] = verdict

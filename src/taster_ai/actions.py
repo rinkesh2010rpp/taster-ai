@@ -17,9 +17,9 @@ def decide(target: Target, verdict: Verdict) -> Action:
     """What enforce mode does with a verdict on a tool result."""
     if not verdict.ok:
         return "withheld" if target.on_error == "block" else "labelled"
-    if verdict.label == "clean":
+    if verdict.label == "follows":
         return "passed"
-    if verdict.label == "injection":
+    if verdict.label == "breaks":
         return "withheld" if verdict.confidence >= target.threshold else "wrapped"
     return {"wrap": "wrapped", "withhold": "withheld", "pass": "passed"}[target.unclear]
 
@@ -33,7 +33,7 @@ def decide_call(target: Target, verdict: Verdict) -> Action:
         if verdict.oversized or target.on_error == "block":
             return "blocked"
         return "passed"
-    if verdict.label == "injection":
+    if verdict.label == "breaks":
         return "blocked" if verdict.confidence >= target.threshold else "passed"
     if verdict.label == "unclear" and target.unclear == "withhold":
         return "blocked"

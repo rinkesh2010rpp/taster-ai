@@ -62,7 +62,7 @@ def test_chunks_overlap_so_a_straddling_attack_is_seen_whole():
 def test_one_flagged_chunk_flags_the_whole_result():
     detector = FakeDetector(lambda t: verdict("injection", 0.95) if "EVIL" in t else verdict("clean", 0.99), max_chars=100)
     d = screener_for(detector).screen("search_web", {}, "x" * 120 + "EVIL" + "y" * 120)
-    assert d.verdict.label == "injection" and d.action == "withheld" and d.chunks > 1
+    assert d.verdict.label == "breaks" and d.action == "withheld" and d.chunks > 1
 
 
 def test_too_many_chunks_is_unscreenable(fake):
@@ -82,16 +82,16 @@ def refuses_over(limit):
 def test_a_refused_chunk_is_halved_until_it_fits():
     text = "".join(f"line {i}\n" for i in range(150))  # ~1200 chars, no two pieces alike
     d = screener_for(refuses_over(300)).screen("search_web", {}, text)
-    assert d.verdict.label == "clean" and d.chunks > 4  # clean, not error: every piece was accepted
+    assert d.verdict.label == "follows" and d.chunks > 4  # follows, not error: every piece was accepted
 
     d = screener_for(refuses_over(300)).screen("search_web", {}, text + "EVIL")
-    assert d.verdict.label == "injection" and d.action == "withheld"
+    assert d.verdict.label == "breaks" and d.action == "withheld"
 
 
 def test_split_halves_overlap_so_nothing_is_missed():
     detector = refuses_over(600)
     text = "x" * 500 + "EVIL" + "y" * 496  # the attack sits right on the midpoint
-    assert screener_for(detector).screen("search_web", {}, text).verdict.label == "injection"
+    assert screener_for(detector).screen("search_web", {}, text).verdict.label == "breaks"
 
 
 def test_giving_up_on_splits_follows_on_error():
@@ -103,7 +103,7 @@ def test_giving_up_on_splits_follows_on_error():
 def test_combine_order():
     clean, unclear, bad = verdict("clean", 0.9), verdict("unclear", 0.6), verdict("injection", 0.8)
     failed = Verdict.failed("fake", "timeout")
-    assert combine([clean, bad, failed]).label == "injection"
+    assert combine([clean, bad, failed]).label == "breaks"
     assert combine([clean, failed, unclear]).label == "error"
     assert combine([clean, unclear]).label == "unclear"
     assert combine([clean, verdict("clean", 0.5)]).confidence == 0.5

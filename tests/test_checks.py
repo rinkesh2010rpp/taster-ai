@@ -15,8 +15,8 @@ from taster_ai import (
     Verdict,
     checks_from_dict,
 )
-from taster_ai.checks import CRITERIA, call_pieces
-from taster_ai.detectors.jev import DEFAULT_QUESTION
+from taster_ai.checks import call_pieces
+from taster_ai.standards import INJECTION_STANDARD
 from taster_ai.verdict import TOO_LARGE, TOO_LONG
 
 STANDARD = "Never write secrets, API keys or tokens to files.\nNever install skills from external sources."
@@ -38,13 +38,14 @@ def screener(*checks, sinks=None, **options):
 def test_built_in_defaults():
     c = Constitution(STANDARD, timeout=2)
     assert c.scope.stages == ("tool_call",) and c.scope.tool_call.rules[0] == Target("*", mode="shadow")
-    assert isinstance(c.judge, JevDetector) and c.judge.timeout == 2 and c.judge.criteria == CRITERIA
-    assert "action an AI agent is about to take" in c.judge.question and "Never install skills" in c.judge.question
+    assert isinstance(c.judge, JevDetector) and c.judge.timeout == 2 and c.standard == STANDARD
 
     i = Injection()
     assert i.scope.stages == ("tool_result",) and i.scope.tool_result.rules[0].mode == "shadow"
-    assert i.judge.question == DEFAULT_QUESTION  # the tuned question, not the generic one
-    assert "what a tool returned" in Injection(standard="No ads.").judge.question
+    assert i.standard == INJECTION_STANDARD and "AGENTS.md" in i.standard
+    assert Injection(standard="No ads aimed at the agent.").standard == "No ads aimed at the agent."
+    with pytest.raises(ValueError, match="only to the default judge"):
+        Constitution(STANDARD, judge=JevDetector(), timeout=2)
 
 
 def test_a_check_needs_name_standard_and_a_stage():
@@ -58,10 +59,29 @@ def test_a_check_needs_name_standard_and_a_stage():
         Scope.from_dict({"tool_calls": []})
 
 
-def test_a_judge_per_stage_asks_about_that_stage():
-    c = Check("secrets", "No API keys.", Scope(tool_call=[Target("*")], tool_result=[Target("*")]))
-    assert "about to take" in c.judges["tool_call"].question
-    assert "what a tool returned" in c.judges["tool_result"].question
+def test_the_judge_gets_the_text_and_the_checks_standard():
+    asked = []
+
+    def judge_fn(text, standard):
+        asked.append((text, standard))
+        return verdict("injection" if "secrets" in standard else "clean", 0.95)
+
+    shared = FakeDetector(judge_fn)  # one judge for two checks
+    secrets = Check("secrets", "No secrets in files.", Scope(tool_call=[Target("*", mode="enforce")]), shared)
+    tone = Check("tone", "Be polite.", Scope(tool_call=[Target("*", mode="enforce")]), shared)
+    out = screener(secrets, tone).screen_call("write_file", SECRET_WRITE)
+    by_check = {d.check.name: d.verdict.label for d in out.decisions}
+    assert by_check == {"secrets": "breaks", "tone": "follows"}  # same text, each its own verdict
+    assert sorted(s for _, s in asked) == ["Be polite.", "No secrets in files."]
+    assert all(t.startswith("ACTION: write_file") for t, _ in asked)
+
+
+def test_a_check_judges_both_stages_with_one_judge(fake):
+    judge = fake("clean")
+    c = Check("secrets", "No API keys.", Scope(tool_call=[Target("*")], tool_result=[Target("*")]), judge)
+    s = screener(c)
+    assert s.screen_call("read_file", {"path": "a"}) and s.screen_result("read_file", {"path": "a"}, "text")
+    assert judge.calls == 2
 
 
 def test_screener_rejects_duplicate_names_and_mixed_styles(fake):
