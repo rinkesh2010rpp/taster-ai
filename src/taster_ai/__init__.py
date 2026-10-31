@@ -1,16 +1,18 @@
-"""Taster: antivirus for your AI agent.
+"""Taster: checks on what your AI agent does and what it takes in.
 
-Every tool result is tasted before your agent swallows it. The core has no
-dependencies; framework adapters live in `taster_ai.adapters`.
+Every tool call is checked before it runs, and every tool result before your
+agent swallows it, by the checks you choose (Injection, Constitution, your
+own Check). The core has no dependencies; framework adapters live in
+`taster_ai.adapters`.
 """
 
 from typing import Any
 
 from .actions import Messages
-from .constitution import Constitution
+from .checks import Check, Constitution, Injection, checks_from_dict, checks_from_yaml
 from .detectors import CallableDetector, Detector, FallbackDetector, HeuristicDetector, JevDetector
-from .policy import Policy, Rule
-from .screener import CallDecision, Decision, Screener
+from .policy import Policy, Rule, Scope, Target
+from .screener import Decision, Outcome, Screener
 from .sinks import BackgroundSink, JsonlSink, log_sink, print_sink
 from .verdict import TOO_LONG, ToolContext, Verdict
 
@@ -18,23 +20,29 @@ __version__ = "0.1.0.dev3"
 
 __all__ = [
     "BackgroundSink",
-    "CallDecision",
     "CallableDetector",
+    "Check",
     "Constitution",
     "Decision",
     "Detector",
     "FallbackDetector",
     "HeuristicDetector",
+    "Injection",
     "JevDetector",
     "JsonlSink",
     "LLMDetector",
     "Messages",
+    "Outcome",
     "Policy",
     "Rule",
+    "Scope",
     "Screener",
     "TOO_LONG",
+    "Target",
     "ToolContext",
     "Verdict",
+    "checks_from_dict",
+    "checks_from_yaml",
     "log_sink",
     "print_sink",
 ]
