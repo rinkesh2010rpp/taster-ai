@@ -26,9 +26,9 @@ from dataclasses import dataclass
 from typing import Any, Iterable, Mapping
 
 from .actions import Action, Messages, decide, decide_call
-from .checks import Check, Injection, call_pieces
-from .detectors import Detector, HeuristicDetector
-from .policy import Policy, Scope, Target
+from .checks import Check, call_pieces
+from .detectors import Detector
+from .scope import Target
 from .sinks import Sink, log_sink
 from .verdict import TOO_LARGE, ToolContext, Verdict
 
@@ -53,10 +53,6 @@ class Decision:
     chunks: int
     input_hash: str
     latency_s: float
-
-    @property
-    def rule(self) -> Target:  # the 0.1 name
-        return self.target
 
     @property
     def blocked(self) -> bool:
@@ -194,11 +190,6 @@ class Screener:
     """Runs checks on tool calls and tool results.
 
     checks      the checks to run (Injection, Constitution, your own Check)
-    policy, detector, detectors
-                the 0.1 way, still supported: one injection check on tool
-                results with these targets, judged by `detector` (default:
-                the free HeuristicDetector), with `detectors` by name. Pass
-                these or `checks`, not both.
     sinks       callables that receive each decision's record; defaults to
                 [log_sink]. Pass [] for none.
     messages    the wording of what the agent is told
@@ -213,11 +204,8 @@ class Screener:
 
     def __init__(
         self,
-        policy: Policy | None = None,
-        detector: Any = None,
+        checks: Iterable[Check],
         *,
-        checks: Iterable[Check] | None = None,
-        detectors: Mapping[str, Any] | None = None,
         sinks: Iterable[Sink] | None = None,
         messages: Messages | None = None,
         overlap: int = 200,
@@ -225,13 +213,6 @@ class Screener:
         max_splits: int = 4,
         cache_size: int = 1024,
     ):
-        if checks is None:
-            if policy is None:
-                raise ValueError("pass checks=[...] (or a policy)")
-            judge = detector if detector is not None else HeuristicDetector()
-            checks = [Injection(Scope(tool_result=policy), judge, detectors=detectors)]
-        elif policy is not None or detector is not None or detectors:
-            raise ValueError("pass checks=[...], or policy/detector/detectors, not both")
         self.checks = list(checks)
         if not self.checks:
             raise ValueError("pass at least one check")
@@ -263,19 +244,11 @@ class Screener:
             return None
         return self._run("tool_result", tool, args or {}, text, tool_call_id)
 
-    def screen(
-        self, tool: str, args: Mapping[str, Any] | None, text: str, tool_call_id: str | None = None
-    ) -> Decision | None:
-        """The 0.1 call: screen a result and return the first check's
-        decision. Use screen_result to get every check's."""
-        outcome = self.screen_result(tool, args, text, tool_call_id)
-        return outcome.decisions[0] if outcome else None
-
     def _run(self, stage: str, tool: str, args: Mapping[str, Any], text: str, tool_call_id: str | None):
         jobs = []
         for check in self.checks:
             targets = check.scope.for_stage(stage)
-            target = targets.rule_for(tool, args) if targets is not None else None
+            target = targets.target_for(tool, args) if targets is not None else None
             if target is not None and target.mode != "pass":
                 jobs.append((check, target))
         if not jobs:

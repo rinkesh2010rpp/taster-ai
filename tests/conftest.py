@@ -32,7 +32,7 @@ def verdict(label: str, confidence: float = 0.9) -> Verdict:
 @pytest.fixture
 def fake():
     """fake(label, confidence) -> a detector that always says that."""
-    return lambda label="clean", confidence=0.9, **kw: FakeDetector(lambda _t: verdict(label, confidence), **kw)
+    return lambda label="follows", confidence=0.9, **kw: FakeDetector(lambda _t: verdict(label, confidence), **kw)
 
 
 # The five pages from the first live test against Jev (2026-09-27), with the

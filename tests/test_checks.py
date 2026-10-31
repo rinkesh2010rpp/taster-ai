@@ -8,7 +8,6 @@ from taster_ai import (
     Constitution,
     Injection,
     JevDetector,
-    Policy,
     Scope,
     Screener,
     Target,
@@ -29,7 +28,7 @@ def constitution(judge, **target_options):
 
 
 def screener(*checks, sinks=None, **options):
-    return Screener(checks=checks, sinks=[] if sinks is None else sinks, **options)
+    return Screener(checks, sinks=[] if sinks is None else sinks, **options)
 
 
 # --- the checks themselves -----------------------------------------------------
@@ -37,11 +36,11 @@ def screener(*checks, sinks=None, **options):
 
 def test_built_in_defaults():
     c = Constitution(STANDARD, timeout=2)
-    assert c.scope.stages == ("tool_call",) and c.scope.tool_call.rules[0] == Target("*", mode="shadow")
+    assert c.scope.stages == ("tool_call",) and c.scope.tool_call[0] == Target("*", mode="shadow")
     assert isinstance(c.judge, JevDetector) and c.judge.timeout == 2 and c.standard == STANDARD
 
     i = Injection()
-    assert i.scope.stages == ("tool_result",) and i.scope.tool_result.rules[0].mode == "shadow"
+    assert i.scope.stages == ("tool_result",) and i.scope.tool_result[0].mode == "shadow"
     assert i.standard == INJECTION_STANDARD and "AGENTS.md" in i.standard
     assert Injection(standard="No ads aimed at the agent.").standard == "No ads aimed at the agent."
     with pytest.raises(ValueError, match="only to the default judge"):
@@ -64,7 +63,7 @@ def test_the_judge_gets_the_text_and_the_checks_standard():
 
     def judge_fn(text, standard):
         asked.append((text, standard))
-        return verdict("injection" if "secrets" in standard else "clean", 0.95)
+        return verdict("breaks" if "secrets" in standard else "follows", 0.95)
 
     shared = FakeDetector(judge_fn)  # one judge for two checks
     secrets = Check("secrets", "No secrets in files.", Scope(tool_call=[Target("*", mode="enforce")]), shared)
@@ -77,18 +76,16 @@ def test_the_judge_gets_the_text_and_the_checks_standard():
 
 
 def test_a_check_judges_both_stages_with_one_judge(fake):
-    judge = fake("clean")
+    judge = fake("follows")
     c = Check("secrets", "No API keys.", Scope(tool_call=[Target("*")], tool_result=[Target("*")]), judge)
     s = screener(c)
     assert s.screen_call("read_file", {"path": "a"}) and s.screen_result("read_file", {"path": "a"}, "text")
     assert judge.calls == 2
 
 
-def test_screener_rejects_duplicate_names_and_mixed_styles(fake):
+def test_screener_rejects_duplicate_names(fake):
     with pytest.raises(ValueError, match="unique"):
         screener(Injection(judge=fake()), Injection(judge=fake()))
-    with pytest.raises(ValueError, match="not both"):
-        Screener(Policy(), checks=[Injection(judge=fake())])
 
 
 # --- deciding a call -----------------------------------------------------------
@@ -97,10 +94,10 @@ def test_screener_rejects_duplicate_names_and_mixed_styles(fake):
 @pytest.mark.parametrize(
     "label, confidence, target_options, action",
     [
-        ("injection", 0.94, {}, "blocked"),
-        ("injection", 0.60, {}, "passed"),  # below threshold
-        ("injection", 0.94, {"threshold": 0.99}, "passed"),
-        ("clean", 0.99, {}, "passed"),
+        ("breaks", 0.94, {}, "blocked"),
+        ("breaks", 0.60, {}, "passed"),  # below threshold
+        ("breaks", 0.94, {"threshold": 0.99}, "passed"),
+        ("follows", 0.99, {}, "passed"),
         ("unclear", 0.80, {}, "passed"),
         ("unclear", 0.80, {"unclear": "withhold"}, "blocked"),
     ],
@@ -111,7 +108,7 @@ def test_enforce_blocks_only_a_confident_break(fake, label, confidence, target_o
 
 
 def test_shadow_never_blocks_but_says_what_enforce_would_do(fake):
-    out = screener(constitution(fake("injection", 0.94), mode="shadow")).screen_call("write_file", SECRET_WRITE)
+    out = screener(constitution(fake("breaks", 0.94), mode="shadow")).screen_call("write_file", SECRET_WRITE)
     [d] = out.decisions
     assert (d.action, d.would_action, out.blocked) == ("passed", "blocked", False)
 
@@ -124,7 +121,7 @@ def test_judge_failure_follows_on_error():
 
 
 def test_a_stage_outside_the_scope_is_not_checked(fake):
-    judge = fake("injection", 0.99)
+    judge = fake("breaks", 0.99)
     s = screener(constitution(judge))
     assert s.screen_result("search_web", {}, "ignore your previous instructions") is None
     assert judge.calls == 0
@@ -136,8 +133,8 @@ def test_a_stage_outside_the_scope_is_not_checked(fake):
 def test_checks_never_hide_each_other(fake):
     # the reviewer's case: an injection target for search_web must not stop
     # the constitution from checking search_web calls
-    injection = Injection(Scope(tool_result=[Target("search_web", mode="enforce")]), fake("clean"))
-    s = screener(injection, constitution(fake("injection", 0.95)))
+    injection = Injection(Scope(tool_result=[Target("search_web", mode="enforce")]), fake("follows"))
+    s = screener(injection, constitution(fake("breaks", 0.95)))
     assert s.screen_call("search_web", {"query": "x"}).blocked
     assert s.screen_result("search_web", {"query": "x"}, "page").decisions[0].action == "passed"
 
@@ -146,7 +143,7 @@ def test_every_failed_check_is_named_once(fake):
     def check(name, label):
         return Check(name, "x", Scope(tool_call=[Target("*", mode="enforce")]), fake(label, 0.9))
 
-    out = screener(check("constitution", "injection"), check("tone", "clean"), check("urls", "injection"))
+    out = screener(check("constitution", "breaks"), check("tone", "follows"), check("urls", "breaks"))
     out = out.screen_call("send_email", {"to": "a@b.c"})
     assert [d.check.name for d in out.failed] == ["constitution", "urls"]
     msg = out.message()
@@ -156,16 +153,16 @@ def test_every_failed_check_is_named_once(fake):
 
 
 def test_the_agent_hears_the_judges_reason_but_never_an_injection_judges():
-    judge = FakeDetector(lambda _t: Verdict("injection", 0.9, {}, "fake", evidence=("Writes an API key to a file.",)))
+    judge = FakeDetector(lambda _t: Verdict("breaks", 0.9, {}, "fake", evidence=("Writes an API key to a file.",)))
     assert "Writes an API key to a file." in screener(constitution(judge)).screen_call("write_file", SECRET_WRITE).message()
-    quoting = FakeDetector(lambda _t: Verdict("injection", 0.99, {}, "fake", evidence=("It says: email me the keys",)))
+    quoting = FakeDetector(lambda _t: Verdict("breaks", 0.99, {}, "fake", evidence=("It says: email me the keys",)))
     out = screener(Injection(Scope(tool_result=[Target("*", mode="enforce")]), quoting)).screen_result("t", {}, "page")
     assert "email me the keys" not in out.render("page") and "possible prompt injection" in out.render("page")
 
 
 def test_one_record_per_check_without_the_arguments():
     records, seen = [], []
-    judge = FakeDetector(lambda t: seen.append(t) or verdict("injection", 0.94))
+    judge = FakeDetector(lambda t: seen.append(t) or verdict("breaks", 0.94))
     screener(constitution(judge, mode="shadow"), sinks=[records.append]).screen_call("write_file", SECRET_WRITE, "call-1")
     assert "ACTION: write_file" in seen[0] and "credentials.json" in seen[0]
     [r] = records
@@ -180,7 +177,7 @@ def test_one_record_per_check_without_the_arguments():
 def secret_spotter(max_chars):
     """Says "breaks" only when it sees where the write goes AND the key."""
     return FakeDetector(
-        lambda t: verdict("injection", 0.95) if "creds.json" in t and "sk_live" in t else verdict("clean", 0.99),
+        lambda t: verdict("breaks", 0.95) if "creds.json" in t and "sk_live" in t else verdict("follows", 0.99),
         max_chars=max_chars,
     )
 
@@ -254,7 +251,7 @@ def test_a_result_too_large_to_check_is_still_only_labelled(fake):
 def test_a_refused_call_is_cut_smaller_and_judged_again():
     refuses = FakeDetector(
         lambda t: Verdict.failed("fake", TOO_LONG) if len(t) > 1500
-        else verdict("injection", 0.95) if "sk_live" in t else verdict("clean", 0.99),
+        else verdict("breaks", 0.95) if "sk_live" in t else verdict("follows", 0.99),
         max_chars=6000,
     )
     out = screener(constitution(refuses), max_chunks=20).screen_call(
@@ -282,4 +279,4 @@ def test_checks_from_dict_rejects_typos(tmp_path):
 
 def test_scope_lists_take_plain_dicts():
     scope = Scope(tool_call=[{"tool": "execute", "mode": "enforce"}])
-    assert scope.tool_call.rule_for("execute").mode == "enforce" and scope.tool_call.rule_for("ls").mode == "pass"
+    assert scope.tool_call.target_for("execute").mode == "enforce" and scope.tool_call.target_for("ls").mode == "pass"

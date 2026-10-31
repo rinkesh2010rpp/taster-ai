@@ -35,7 +35,7 @@ import os
 from typing import Any, Mapping
 
 from .detectors import Detector, JevDetector, as_detector
-from .policy import STAGES, Scope, Target, load_yaml
+from .scope import STAGES, Scope, Target, load_yaml
 from .standards import INJECTION_STANDARD
 
 
@@ -259,4 +259,30 @@ def checks_from_yaml(source: str) -> list[Check]:
     return checks_from_dict(data or {}, folder)
 
 
-__all__ = ["INJECTION_STANDARD", "STAGES", "Check", "Constitution", "Injection", "call_pieces"]
+def checks_from_json(text: str) -> list[Check]:
+    return checks_from_dict(json.loads(text))
+
+
+def checks_from_env(var: str = "TASTER_CHECKS", default: list[Check] | None = None) -> list[Check]:
+    """Checks from JSON in an environment variable (the checks_from_dict
+    shape), or `default` if it's unset: change checks without a redeploy."""
+    raw = os.environ.get(var, "").strip()
+    if not raw:
+        if default is None:
+            raise ValueError(f"{var} is not set and no default checks were given")
+        return default
+    return checks_from_json(raw)
+
+
+__all__ = [
+    "INJECTION_STANDARD",
+    "STAGES",
+    "Check",
+    "Constitution",
+    "Injection",
+    "call_pieces",
+    "checks_from_dict",
+    "checks_from_env",
+    "checks_from_json",
+    "checks_from_yaml",
+]
