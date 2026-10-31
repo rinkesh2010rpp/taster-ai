@@ -17,7 +17,7 @@ from .standards import INJECTION_STANDARD
 from .sinks import BackgroundSink, JsonlSink, log_sink, print_sink
 from .verdict import TOO_LARGE, TOO_LONG, Verdict
 
-__version__ = "0.1.0.dev3"
+__version__ = "0.2.0.dev0"
 
 __all__ = [
     "BackgroundSink",
