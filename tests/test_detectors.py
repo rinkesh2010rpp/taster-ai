@@ -5,7 +5,7 @@ import urllib.error
 import pytest
 from conftest import PAGES, FakeDetector, verdict
 
-from taster_ai import CallableDetector, FallbackDetector, HeuristicDetector, JevDetector, Verdict
+from taster_ai import FallbackDetector, HeuristicDetector, JevDetector, Verdict
 from taster_ai.verdict import TOO_LONG
 
 # --- heuristic -----------------------------------------------------------
@@ -80,13 +80,10 @@ def test_fallback_needs_two():
         FallbackDetector(HeuristicDetector())
 
 
-def test_callable_detector():
-    v = CallableDetector(lambda t, s: ("breaks", 0.8), name="mine").safe_detect("x", "s")
-    assert (v.label, v.confidence, v.detector) == ("breaks", 0.8, "mine")
-    assert CallableDetector(lambda t, s: ("nonsense", 1)).safe_detect("x", "s").label == "error"
-    assert CallableDetector(lambda t, s: ("injection", 1)).safe_detect("x", "s").label == "error"  # 0.1 labels are gone
-    seen = CallableDetector(lambda t, standard: ("follows", 1.0) if standard == "Be polite." else ("breaks", 1.0))
-    assert seen.safe_detect("x", "Be polite.").label == "follows"
+@pytest.mark.parametrize("label", ["nonsense", "injection", "clean"])  # 0.1 labels are gone too
+def test_a_judge_answering_an_unknown_label_is_an_error(label):
+    v = FakeDetector(lambda _t: Verdict(label, 0.9)).safe_detect("x", "s")  # type: ignore[arg-type]
+    assert v.label == "error" and v.error.startswith("bad-verdict")
 
 
 # --- jev (HTTP mocked) -----------------------------------------------------

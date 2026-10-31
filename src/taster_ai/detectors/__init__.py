@@ -1,17 +1,15 @@
-"""Detectors judge whether text is a prompt injection. Add your own by
-subclassing `Detector` and implementing `detect`, or wrap a function with
-`CallableDetector`."""
+"""Judges: does this text follow the standard? Add your own by subclassing
+`Detector` and implementing `detect(text, standard)`."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from .base import CallableDetector, Detector, FallbackDetector
+from .base import Detector, FallbackDetector
 from .heuristic import HeuristicDetector
 from .jev import JevDetector
 
 __all__ = [
-    "CallableDetector",
     "Detector",
     "FallbackDetector",
     "HeuristicDetector",
@@ -44,5 +42,5 @@ def as_detector(obj: Any) -> Detector:
         return LLMDetector(obj)
     raise TypeError(
         f"expected a Detector or a LangChain chat model, got {type(obj).__name__}; "
-        "wrap a plain function with CallableDetector"
+        "for your own judge, subclass Detector and implement detect(text, standard)"
     )

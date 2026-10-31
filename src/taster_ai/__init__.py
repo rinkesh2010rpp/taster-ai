@@ -10,7 +10,7 @@ from typing import Any
 
 from .actions import Messages
 from .checks import Check, Constitution, Injection, checks_from_dict, checks_from_env, checks_from_json, checks_from_yaml
-from .detectors import CallableDetector, Detector, FallbackDetector, HeuristicDetector, JevDetector
+from .detectors import Detector, FallbackDetector, HeuristicDetector, JevDetector
 from .scope import Scope, Target
 from .screener import Decision, Outcome, Screener
 from .standards import INJECTION_STANDARD
@@ -21,7 +21,6 @@ __version__ = "0.2.0.dev0"
 
 __all__ = [
     "BackgroundSink",
-    "CallableDetector",
     "Check",
     "Constitution",
     "Decision",
