@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from typing import Callable
 
 import pytest
@@ -8,7 +9,7 @@ from taster_ai import Detector, Verdict
 
 
 class FakeDetector(Detector):
-    """Answers with `fn(text)` and counts its calls."""
+    """Answers with `fn(text)` (or `fn(text, standard)`) and counts its calls."""
 
     name = "fake"
 
@@ -17,8 +18,10 @@ class FakeDetector(Detector):
         self.max_chars = max_chars
         self.calls = 0
 
-    def detect(self, text, context=None):
+    def detect(self, text, standard=None):
         self.calls += 1
+        if len(inspect.signature(self.fn).parameters) >= 2:
+            return self.fn(text, standard)
         return self.fn(text)
 
 

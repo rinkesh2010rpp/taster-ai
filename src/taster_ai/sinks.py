@@ -42,10 +42,10 @@ class JsonlSink:
 
 
 def log_sink(record: dict[str, Any]) -> None:
-    """One summary line per screened call on the `taster_ai` logger (INFO)."""
+    """One summary line per check per call on the `taster_ai` logger (INFO)."""
     logger.info(
-        "%s mode=%s label=%s conf=%s action=%s would=%s err=%s hash=%s",
-        record["tool"], record["mode"], record["label"], record["confidence"],
+        "%s %s %s mode=%s label=%s conf=%s action=%s would=%s err=%s hash=%s",
+        record.get("check"), record.get("stage"), record["tool"], record["mode"], record["label"], record["confidence"],
         record["action"], record["would_action"], record["error"], record["input_hash"],
     )
 
@@ -53,7 +53,7 @@ def log_sink(record: dict[str, Any]) -> None:
 def print_sink(record: dict[str, Any]) -> None:
     """Like log_sink, but printed, for hosts that capture stdout (e.g. Modal)."""
     print(
-        f"[taster] {record['tool']} mode={record['mode']} label={record['label']} "
+        f"[taster] {record.get('check')} {record.get('stage')} {record['tool']} mode={record['mode']} label={record['label']} "
         f"conf={record['confidence']} action={record['action']} would={record['would_action']} "
         f"err={record['error']} hash={record['input_hash']}"
     )
