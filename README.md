@@ -76,8 +76,8 @@ pip install "taster-ai[langchain,yaml] @ git+https://github.com/rinkesh2010rpp/t
 ```
 
 Requires Python 3.10+ and, for the middleware, LangChain 1.x. (The checks API
-below is on `main` and comes in the next release; 0.1.0.dev3 has the
-`policy=` setup described under "Upgrading from 0.1".)
+below is on `main` and comes in the next release; 0.1.0.dev3 has the older
+`policy=` setup, documented in that tag's README.)
 
 ### 2. Choose your checks
 
@@ -184,10 +184,10 @@ middleware, so list there anything else it should keep (e.g. a customised
 | Variable | Needed when | Without it |
 |---|---|---|
 | `OPENROUTER_API_KEY` | you use `JevDetector()` without `api_key=` | Jev can't answer; a fallback detector takes over, or the target's `on_error` applies |
-| `TASTER_POLICY` (or a name you choose) | you load 0.1 rules with `Policy.from_env()` | your default policy is used |
+| `TASTER_CHECKS` (or a name you choose) | you load checks with `checks_from_env()` | your default checks are used |
 
 `Injection()` and `Constitution()` are judged by Jev by default, so they need
-`OPENROUTER_API_KEY`; the 0.1 `policy=` setup needs none. Your own LLM judge needs its provider's key
+`OPENROUTER_API_KEY`. Your own LLM judge needs its provider's key
 (e.g. `OPENAI_API_KEY`), as LangChain usually does.
 
 ---
@@ -207,7 +207,7 @@ TasterMiddleware.from_yaml("taster.yaml", sinks=[...])
 ```
 
 Outside an agent framework, `Screener` takes the same arguments:
-`Screener(checks=[...]).screen_call("write_file", args)` before a tool runs
+`Screener([...checks]).screen_call("write_file", args)` before a tool runs
 and `.screen_result("read_email", args, text)` after; each returns an
 `Outcome` (or `None` if no check runs on it), with `.blocked`, `.message()`,
 `.render(content)` and every check's `.decisions`.
@@ -273,7 +273,9 @@ Jev options (`timeout=2`, `title=...`) can be passed to any check whose judge
 is the default: `Constitution(text, timeout=2)`. With your own `judge`, set
 them on it instead.
 
-In YAML, `check: injection` or `check: constitution` picks a built-in check;
+In YAML or JSON (`checks_from_yaml`, `checks_from_json`, or
+`checks_from_env("TASTER_CHECKS", default=...)` to change checks without a
+redeploy), `check: injection` or `check: constitution` picks a built-in check;
 leave `check` out for your own (then `name`, `standard` and `scope` are
 needed). `standard_file` reads the standard from a file next to the YAML.
 YAML checks are judged by Jev; build checks in Python to use another judge.
@@ -363,10 +365,6 @@ The contract:
 - **Be thread-safe and consistent**: pieces and checks are judged in
   parallel, and answers are cached by judge, standard and text.
 
-A 0.1 detector (`detect(text, context)`, labels `clean` / `injection`) still
-works: the standard arrives where `context` was, and the old labels are read
-as `follows` / `breaks`.
-
 **Your LLM as the judge:** the judge reads the same untrusted text, so a page
 can try to talk it round. `LLMDetector` fences the text between random
 markers, tells the model the text is evidence and never instructions, forces
@@ -409,27 +407,17 @@ back), with placeholders `{tool}` and `{failures}`; `failure` and
 large to check); and `wrap_header` / `wrap_footer` (around a
 wrapped result, with `{tool}` and `{why}`).
 
-### Upgrading from 0.1
+### Changes from 0.1
 
-The 0.1 setup still works and behaves as before:
-
-```python
-TasterMiddleware(policy=Policy.from_yaml("taster.yaml"), detector=JevDetector())
-```
-
-is one `Injection` check on tool results with those targets (`Policy` is one
-stage's list of targets, `Rule` is the old name for `Target`; the default
-judge on this path is still `HeuristicDetector()`). `Screener.screen()`
-still returns that check's decision. What changed:
-
-- the agent's messages (see above, and the `Messages` fields);
-- the labels are `follows` / `breaks` / `unclear` (were `clean` /
-  `injection` / `unclear`), in verdicts and records; 0.1 labels from your own
-  judges are still accepted;
-- a judge is `detect(text, standard)` (was `detect(text, context)`), and
-  `JevDetector` / `LLMDetector` no longer take `question=` or `criteria=`:
-  the standard comes from the check;
-- records name the `check`, `stage` and `target` (was `rule`).
+0.2 replaces the 0.1 `policy=` / `detector=` setup with checks; there is no
+compatibility layer. `Policy` and `Rule` are now `Scope` and `Target` (one
+scope holds a list of targets per stage), `Policy.from_*` are
+`checks_from_yaml` / `checks_from_json` / `checks_from_dict` /
+`checks_from_env`, `Screener.screen()` is `screen_result()`, labels are
+`follows` / `breaks` / `unclear` (were `clean` / `injection` / `unclear`), a
+judge is `detect(text, standard)` (was `detect(text, context)`), and records
+name the `check`, `stage` and `target` (was `rule`). Stay on
+`v0.1.0.dev3` until you move.
 
 ### Sinks: where records go
 

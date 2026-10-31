@@ -21,14 +21,13 @@ add it to that subagent's middleware too.
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable
 
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
 
 from ..actions import text_of
 from ..checks import Check, checks_from_yaml
-from ..policy import Policy
 from ..screener import Screener
 from ..sinks import Sink
 
@@ -39,23 +38,19 @@ class TasterMiddleware(AgentMiddleware):
 
     def __init__(
         self,
-        policy: Policy | None = None,
-        detector: Any = None,
-        *,
         checks: Iterable[Check] | None = None,
-        detectors: Mapping[str, Any] | None = None,
+        *,
         sinks: Iterable[Sink] | None = None,
         screener: Screener | None = None,
         **screener_options: Any,
     ):
-        """checks (or the 0.1 policy, detector, detectors), sinks and any
-        other options are passed to Screener (see there); or pass a ready
-        `screener`."""
+        """checks, sinks and any other options are passed to Screener (see
+        there); or pass a ready `screener`."""
         super().__init__()
         if screener is None:
-            screener = Screener(
-                policy, detector, checks=checks, detectors=detectors, sinks=sinks, **screener_options
-            )
+            if checks is None:
+                raise ValueError("pass checks=[...] (or a ready screener)")
+            screener = Screener(checks, sinks=sinks, **screener_options)
         self.screener = screener
 
     @classmethod

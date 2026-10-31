@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from .verdict import Verdict
 
 if TYPE_CHECKING:
-    from .policy import Target
+    from .scope import Target
 
 Action = Literal["passed", "wrapped", "withheld", "labelled", "blocked"]
 

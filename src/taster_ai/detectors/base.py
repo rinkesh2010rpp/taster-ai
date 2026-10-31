@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-import inspect
-import inspect
 import time
 from abc import ABC, abstractmethod
 from dataclasses import replace
 from typing import Any, Callable
 
-from ..standards import INJECTION_STANDARD
-from ..verdict import ALIASES, LABELS, TOO_LONG, Verdict
+from ..verdict import LABELS, TOO_LONG, Verdict
 
 
 class Detector(ABC):
@@ -42,12 +39,8 @@ class Detector(ABC):
         """Judge `text` against `standard`. May raise; `safe_detect` turns
         that into an error."""
 
-    def safe_detect(self, text: str, standard: str | None = None) -> Verdict:
-        """`detect` that never raises. Without a standard (or with a 0.1
-        caller's ToolContext in its place) it judges against the prompt
-        injection standard, as in 0.1."""
-        if not isinstance(standard, str):
-            standard = INJECTION_STANDARD
+    def safe_detect(self, text: str, standard: str) -> Verdict:
+        """`detect` that never raises."""
         started = time.perf_counter()
         try:
             verdict = self.detect(text, standard)
@@ -97,22 +90,16 @@ class FallbackDetector(Detector):
 
 class CallableDetector(Detector):
     """Wrap any function `(text, standard) -> (label, confidence)` as a
-    judge, for in-house models or SDKs Taster has no adapter for. A function
-    taking only `text` works too; it then ignores the standard.
+    judge, for in-house models or SDKs Taster has no adapter for.
 
         CallableDetector(lambda text, standard: my_classifier(text, standard), name="in-house")
     """
 
-    def __init__(self, fn: Callable[[str], tuple[str, float]], *, name: str = "callable", max_chars: int = 8000):
+    def __init__(self, fn: Callable[[str, str], tuple[str, float]], *, name: str = "callable", max_chars: int = 8000):
         self.fn = fn
         self.name = name
         self.max_chars = max_chars
 
     def detect(self, text: str, standard: str) -> Verdict:
-        try:
-            takes_standard = len(inspect.signature(self.fn).parameters) >= 2
-        except (TypeError, ValueError):  # builtins without a signature
-            takes_standard = False
-        label, confidence = self.fn(text, standard) if takes_standard else self.fn(text)
-        label = ALIASES.get(label, label)
+        label, confidence = self.fn(text, standard)
         return Verdict(label, float(confidence), {label: float(confidence)}, self.name)  # type: ignore[arg-type]

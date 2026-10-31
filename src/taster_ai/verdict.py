@@ -7,8 +7,6 @@ from typing import Any, Literal, Mapping
 
 Label = Literal["follows", "breaks", "unclear", "error"]
 LABELS: tuple[str, ...] = ("follows", "breaks", "unclear", "error")
-#: The 0.1 labels, still accepted from judges written for 0.1.
-ALIASES = {"clean": "follows", "injection": "breaks"}
 
 #: The `error` of a judge that refused text as too long for it. The
 #: screener then splits the text in half and asks again.
@@ -35,10 +33,6 @@ class Verdict:
     error: str | None = None
     latency_s: float = 0.0
     evidence: tuple[str, ...] = ()
-
-    def __post_init__(self):
-        object.__setattr__(self, "label", ALIASES.get(self.label, self.label))
-        object.__setattr__(self, "scores", {ALIASES.get(k, k): v for k, v in self.scores.items()})
 
     @property
     def ok(self) -> bool:

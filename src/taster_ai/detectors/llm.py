@@ -29,7 +29,7 @@ import secrets
 from typing import Any, Mapping
 
 from ..standards import CRITERIA, QUESTION
-from ..verdict import ALIASES, Verdict
+from ..verdict import Verdict
 from .base import Detector
 
 _SYSTEM = """You check an AI agent against a standard. You judge either an action the agent is about to take or text it got back from a tool (a web page, a file, command output, an email).
@@ -124,7 +124,6 @@ class LLMDetector(Detector):
         if not isinstance(answer, Mapping):
             return Verdict.failed(self.name, f"bad-answer:{type(answer).__name__}")
         label = str(answer.get("label", "")).strip().lower()
-        label = ALIASES.get(label, label)
         if label not in CRITERIA:
             return Verdict.failed(self.name, f"unexpected-verdict:{label}")
         confidence = min(1.0, max(0.0, float(answer.get("confidence", 0.0))))

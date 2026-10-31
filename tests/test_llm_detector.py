@@ -13,7 +13,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage  # no
 from langchain_core.outputs import ChatGeneration, ChatResult  # noqa: E402
 from langchain_core.runnables import RunnableLambda  # noqa: E402
 
-from taster_ai import FallbackDetector, HeuristicDetector, Policy, Rule, Screener  # noqa: E402
+from taster_ai import INJECTION_STANDARD, FallbackDetector, HeuristicDetector, Injection, Scope, Screener, Target  # noqa: E402
 from taster_ai.detectors import as_detector  # noqa: E402
 from taster_ai.detectors.llm import LLMDetector  # noqa: E402
 
@@ -71,8 +71,8 @@ def test_fence_changes_every_call():
 
 
 def test_json_path_for_models_without_structured_output():
-    detector = LLMDetector(text_model('Sure. {"label": "clean", "confidence": 0.8, "reason": "a recipe"} Done.'))
-    v = detector.safe_detect("a recipe")  # a 0.1 label from the model is read as the new one
+    detector = LLMDetector(text_model('Sure. {"label": "follows", "confidence": 0.8, "reason": "a recipe"} Done.'))
+    v = detector.safe_detect("a recipe", "s")
     assert (v.label, v.confidence) == ("follows", 0.8)
 
 
@@ -85,20 +85,20 @@ def test_json_path_for_models_without_structured_output():
     ],
 )
 def test_bad_answers_become_errors(reply, error):
-    v = LLMDetector(text_model(reply)).safe_detect("x")
+    v = LLMDetector(text_model(reply)).safe_detect("x", "s")
     assert v.label == "error" and error in v.error
 
 
 def test_confidence_is_clamped():
-    v = LLMDetector(text_model('{"label": "injection", "confidence": 7}')).safe_detect("x")
+    v = LLMDetector(text_model('{"label": "breaks", "confidence": 7}')).safe_detect("x", "s")
     assert v.confidence == 1.0
 
 
 def test_chat_models_are_accepted_anywhere_a_detector_is():
-    model = text_model('{"label": "injection", "confidence": 0.95, "reason": "r"}')
+    model = text_model('{"label": "breaks", "confidence": 0.95, "reason": "r"}')
     assert isinstance(as_detector(model), LLMDetector)
-    s = Screener(Policy(rules=[Rule("*", mode="enforce")]), model, sinks=[])
-    assert s.screen("fetch", {}, "page").action == "withheld"
+    s = Screener([Injection(Scope(tool_result=[Target("*", mode="enforce")]), model)], sinks=[])
+    assert s.screen_result("fetch", {}, "page").decisions[0].action == "withheld"
     chain = FallbackDetector(text_model("no json here"), HeuristicDetector())
     assert chain.detectors[0].name.startswith("llm:")
-    assert chain.safe_detect("plain docs").detector.startswith("heuristic (fallback: llm:")
+    assert chain.safe_detect("plain docs", INJECTION_STANDARD).detector.startswith("heuristic (fallback: llm:")

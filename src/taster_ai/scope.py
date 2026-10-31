@@ -1,4 +1,4 @@
-"""Scope: which tools a check looks at, when, and how strictly.
+"""Scope: when a check runs, on which tools, and how strictly.
 
     Scope(
         tool_call=[Target("execute", mode="enforce"), Target("*", mode="shadow")],
@@ -10,24 +10,20 @@ tool runs) and `tool_result` (after it runs, before the model sees the
 result). Inside a stage the first matching target wins; a stage left out is
 not checked, and a tool no target matches is not checked there.
 
-A scope is plain configuration: no detectors, no keys. That makes it safe to
+A scope is plain configuration: no judges, no keys. That makes it safe to
 keep in git and to load from YAML or JSON. Keep it somewhere the agent
 cannot write (your code, a config file outside the agent's workspace, or an
 environment variable). An agent that can edit its own scope can be talked
 into switching its checks off.
-
-`Policy` (one stage's list of targets) and `Rule` (a target) are the 0.1
-names; they still work.
 """
 
 from __future__ import annotations
 
 import fnmatch
-import json
 import os
 import re
 from dataclasses import dataclass, field
-from typing import Any, Literal, Mapping
+from typing import Any, Iterable, Literal, Mapping
 
 Mode = Literal["pass", "shadow", "enforce"]
 MODES = ("pass", "shadow", "enforce")
@@ -48,14 +44,15 @@ class Target:
                or withhold the result; below it a result is wrapped as
                untrusted and a call runs
     on_error   when no verdict can be had: "label" lets it through (a
-               result marked unscreened), "block" blocks or withholds it
+               result marked unscreened), "block" blocks or withholds it. A
+               call too large to check is blocked in enforce mode either way.
     unclear    what an "unclear" verdict does to a result: "wrap",
                "withhold" or "pass"; for a call, "withhold" blocks it and
                the others let it run
     when_args  {arg_name: regex}; the target matches only if every named
                argument matches (re.search). A call that doesn't match falls
                through to later targets.
-    detector   name of a detector given to the check (`detectors={"name":
+    detector   name of a judge given to the check (`detectors={"name":
                ...}`); None uses the check's judge
     """
 
@@ -85,99 +82,58 @@ class Target:
             return False
         return all(p.search(str((args or {}).get(arg, ""))) for arg, p in self._arg_patterns.items())
 
+    @classmethod
+    def from_dict(cls, raw: Mapping[str, Any]) -> Target:
+        """Unknown keys raise, so a typo can't silently switch a check off."""
+        bad = set(raw) - _TARGET_KEYS
+        if bad:
+            raise ValueError(f"target {raw.get('tool')!r}: unknown keys {sorted(bad)}")
+        return cls(**raw)
 
-Rule = Target  # the 0.1 name
 
 PASS = Target("*", mode="pass")
 _TARGET_KEYS = {"tool", "mode", "threshold", "on_error", "unclear", "when_args", "detector"}
 
 
-def target_from_dict(raw: Mapping[str, Any]) -> Target:
-    """A Target from plain data; unknown keys raise, so a typo can't silently
-    switch a check off."""
-    bad = set(raw) - _TARGET_KEYS
-    if bad:
-        raise ValueError(f"target {raw.get('tool')!r}: unknown keys {sorted(bad)}")
-    return Target(**raw)
+class Targets:
+    """One stage's ordered targets; the first match wins, and a tool no
+    target matches is not checked."""
 
+    def __init__(self, targets: Iterable[Target | Mapping[str, Any]] = ()):
+        self.targets = [t if isinstance(t, Target) else Target.from_dict(t) for t in targets]
 
-@dataclass
-class Policy:
-    """One stage's ordered list of targets; the first match wins.
-
-    A tool call that matches no target is not checked; end the list with a
-    `Target("*", ...)` to choose otherwise.
-    """
-
-    rules: list[Target] = field(default_factory=list)
-
-    def __post_init__(self):
-        self.rules = [r if isinstance(r, Target) else target_from_dict(r) for r in self.rules]
-
-    @property
-    def targets(self) -> list[Target]:
-        return self.rules
-
-    def rule_for(self, tool: str, args: Mapping[str, Any] | None = None) -> Target:
-        for rule in self.rules:
-            if rule.matches(tool, args or {}):
-                return rule
+    def target_for(self, tool: str, args: Mapping[str, Any] | None = None) -> Target:
+        for target in self.targets:
+            if target.matches(tool, args or {}):
+                return target
         return PASS
 
-    target_for = rule_for
+    def __iter__(self):
+        return iter(self.targets)
 
-    @classmethod
-    def from_dict(cls, data: Mapping[str, Any]) -> Policy:
-        """Build from plain data (what a YAML or JSON file holds):
+    def __len__(self) -> int:
+        return len(self.targets)
 
-            {"rules": [{"tool": "search_web", "mode": "enforce"},
-                       {"tool": "mcp_*", "mode": "enforce", "detector": "jev"},
-                       {"tool": "*", "mode": "pass"}]}
+    def __getitem__(self, i: int) -> Target:
+        return self.targets[i]
 
-        Unknown keys raise, so a typo can't silently switch screening off.
-        """
-        unknown = set(data) - {"rules"}
-        if unknown:
-            raise ValueError(f"unknown policy keys: {sorted(unknown)} (a policy holds rules only)")
-        return cls(rules=[target_from_dict(raw) for raw in data.get("rules") or []])
-
-    @classmethod
-    def from_json(cls, text: str) -> Policy:
-        return cls.from_dict(json.loads(text))
-
-    @classmethod
-    def from_yaml(cls, source: str) -> Policy:
-        """`source` is a path to a YAML file, or YAML text."""
-        return cls.from_dict(load_yaml(source)[0] or {})
-
-    @classmethod
-    def from_env(cls, var: str = "TASTER_POLICY", default: Policy | None = None) -> Policy:
-        """Load JSON from an environment variable, or return `default` if it's unset."""
-        raw = os.environ.get(var, "").strip()
-        if not raw:
-            if default is None:
-                raise ValueError(f"{var} is not set and no default policy was given")
-            return default
-        return cls.from_json(raw)
-
-
-def _targets(value: Any) -> Policy | None:
-    if value is None or isinstance(value, Policy):
-        return value
-    return Policy(rules=list(value))
+    def __repr__(self) -> str:
+        return f"Targets({self.targets!r})"
 
 
 @dataclass
 class Scope:
     """When a check runs, on which tools, and how strictly: an ordered list
-    of targets (or a Policy) per stage. At least one stage is needed."""
+    of targets per stage. At least one stage is needed."""
 
-    tool_call: Policy | list | None = None
-    tool_result: Policy | list | None = None
+    tool_call: Targets | list | None = None
+    tool_result: Targets | list | None = None
 
     def __post_init__(self):
-        self.tool_call = _targets(self.tool_call)
-        self.tool_result = _targets(self.tool_result)
+        for stage in STAGES:
+            value = getattr(self, stage)
+            if value is not None and not isinstance(value, Targets):
+                setattr(self, stage, Targets(value))
         if not self.stages:
             raise ValueError(f"a scope needs at least one stage: {STAGES}")
 
@@ -185,14 +141,14 @@ class Scope:
     def stages(self) -> tuple[str, ...]:
         return tuple(s for s in STAGES if getattr(self, s) is not None)
 
-    def for_stage(self, stage: str) -> Policy | None:
+    def for_stage(self, stage: str) -> Targets | None:
         if stage not in STAGES:
             raise ValueError(f"stage must be one of {STAGES}, got {stage!r}")
         return getattr(self, stage)
 
     @property
     def targets(self) -> list[Target]:
-        return [t for s in self.stages for t in self.for_stage(s).rules]
+        return [t for s in self.stages for t in self.for_stage(s)]
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> Scope:
@@ -202,7 +158,7 @@ class Scope:
         unknown = set(data) - set(STAGES)
         if unknown:
             raise ValueError(f"unknown scope stages: {sorted(unknown)}; stages are {STAGES}")
-        return cls(**{s: [target_from_dict(t) for t in data[s] or []] for s in data})
+        return cls(**{s: [Target.from_dict(t) for t in data[s] or []] for s in data})
 
 
 def load_yaml(source: str) -> tuple[Any, str | None]:

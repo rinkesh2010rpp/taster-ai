@@ -74,7 +74,7 @@ class HeuristicDetector(Detector):
     name = "heuristic"
     max_chars = 200_000  # no model behind it, so no need to chunk
 
-    def detect(self, text: str, standard: str | None = None) -> Verdict:
+    def detect(self, text: str, standard: str = "") -> Verdict:
         unquoted = _QUOTED.sub(" ", text)
         hits = _hits(unquoted)
         if any(_hits(comment) for comment in _HTML_COMMENT.findall(unquoted)):

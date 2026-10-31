@@ -49,29 +49,29 @@ def test_safe_detect_turns_exceptions_into_errors():
     def boom(_):
         raise RuntimeError("bug")
 
-    v = FakeDetector(boom).safe_detect("x")
+    v = FakeDetector(boom).safe_detect("x", "s")
     assert v.label == "error" and "RuntimeError" in v.error
 
 
 def test_fallback_chain_uses_first_working_detector():
     down = FakeDetector(lambda _t: Verdict.failed("fake", "http-503"))
     also_down = FakeDetector(lambda _t: Verdict.failed("fake", "timeout"))
-    backup = FakeDetector(lambda _t: verdict("injection", 0.9))
-    v = FallbackDetector(down, also_down, backup).safe_detect("x")
+    backup = FakeDetector(lambda _t: verdict("breaks", 0.9))
+    v = FallbackDetector(down, also_down, backup).safe_detect("x", "s")
     assert v.label == "breaks" and "http-503" in v.detector and "timeout" in v.detector
 
-    working = FakeDetector(lambda _t: verdict("clean", 0.99))
+    working = FakeDetector(lambda _t: verdict("follows", 0.99))
     backup.calls = 0
-    assert FallbackDetector(working, backup).safe_detect("x").label == "follows"
+    assert FallbackDetector(working, backup).safe_detect("x", "s").label == "follows"
     assert backup.calls == 0
 
-    v = FallbackDetector(down, also_down).safe_detect("x")
+    v = FallbackDetector(down, also_down).safe_detect("x", "s")
     assert v.label == "error" and "http-503" in v.error and "timeout" in v.error
 
 
 def test_fallback_passes_too_long_up_instead_of_falling_back():
-    backup = FakeDetector(lambda _t: verdict("clean", 0.99))
-    v = FallbackDetector(FakeDetector(lambda _t: Verdict.failed("fake", TOO_LONG)), backup).safe_detect("x")
+    backup = FakeDetector(lambda _t: verdict("follows", 0.99))
+    v = FallbackDetector(FakeDetector(lambda _t: Verdict.failed("fake", TOO_LONG)), backup).safe_detect("x", "s")
     assert v.too_long and backup.calls == 0
 
 
@@ -81,16 +81,12 @@ def test_fallback_needs_two():
 
 
 def test_callable_detector():
-    v = CallableDetector(lambda t: ("injection", 0.8), name="mine").safe_detect("x")  # a 0.1 label
+    v = CallableDetector(lambda t, s: ("breaks", 0.8), name="mine").safe_detect("x", "s")
     assert (v.label, v.confidence, v.detector) == ("breaks", 0.8, "mine")
-    assert CallableDetector(lambda t: ("nonsense", 1)).safe_detect("x").label == "error"
+    assert CallableDetector(lambda t, s: ("nonsense", 1)).safe_detect("x", "s").label == "error"
+    assert CallableDetector(lambda t, s: ("injection", 1)).safe_detect("x", "s").label == "error"  # 0.1 labels are gone
     seen = CallableDetector(lambda t, standard: ("follows", 1.0) if standard == "Be polite." else ("breaks", 1.0))
     assert seen.safe_detect("x", "Be polite.").label == "follows"
-
-
-def test_0_1_labels_are_read_as_the_new_ones():
-    v = Verdict("clean", 0.9, {"clean": 0.9, "injection": 0.1})
-    assert v.label == "follows" and v.scores == {"follows": 0.9, "breaks": 0.1}
 
 
 # --- jev (HTTP mocked) -----------------------------------------------------
@@ -155,17 +151,3 @@ def test_jev_failures_are_error_verdicts(monkeypatch, response, error):
 def test_jev_without_key(monkeypatch):
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     assert JevDetector().detect("x", "s").error == "no-openrouter-key"
-
-
-def test_safe_detect_defaults_to_the_injection_standard(monkeypatch):
-    from taster_ai.standards import INJECTION_STANDARD
-
-    sent = {}
-    monkeypatch.setattr("urllib.request.urlopen", lambda req, timeout: sent.update(body=json.loads(req.data)))
-    JevDetector(api_key="k").safe_detect("page")  # 0.1 callers pass no standard
-    assert INJECTION_STANDARD in sent["body"]["questions"]["verdict"]["instructions"]
-
-    from taster_ai import ToolContext
-
-    JevDetector(api_key="k").safe_detect("page", ToolContext(tool="add_agent"))  # or a ToolContext
-    assert INJECTION_STANDARD in sent["body"]["questions"]["verdict"]["instructions"]
