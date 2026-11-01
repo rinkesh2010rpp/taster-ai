@@ -13,7 +13,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage  # no
 from langchain_core.outputs import ChatGeneration, ChatResult  # noqa: E402
 from langchain_core.runnables import RunnableLambda  # noqa: E402
 
-from taster_ai import INJECTION_STANDARD, FallbackDetector, HeuristicDetector, Injection, Scope, Screener, Target  # noqa: E402
+from taster_ai import INJECTION_STANDARD, FallbackDetector, InjectionPatterns, Injection, Scope, Screener, Target  # noqa: E402
 from taster_ai.detectors import as_detector  # noqa: E402
 from taster_ai.detectors.llm import LLMDetector  # noqa: E402
 
@@ -99,6 +99,6 @@ def test_chat_models_are_accepted_anywhere_a_detector_is():
     assert isinstance(as_detector(model), LLMDetector)
     s = Screener([Injection(Scope(tool_result=[Target("*", mode="enforce")]), model)], sinks=[])
     assert s.screen_result("fetch", {}, "page").decisions[0].action == "withheld"
-    chain = FallbackDetector(text_model("no json here"), HeuristicDetector())
+    chain = FallbackDetector(text_model("no json here"), InjectionPatterns())
     assert chain.detectors[0].name.startswith("llm:")
-    assert chain.safe_detect("plain docs", INJECTION_STANDARD).detector.startswith("heuristic (fallback: llm:")
+    assert chain.safe_detect("plain docs", INJECTION_STANDARD).detector.startswith("injection-patterns (fallback: llm:")

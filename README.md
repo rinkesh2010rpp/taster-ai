@@ -149,14 +149,15 @@ injection tool_result search_web mode=shadow label=breaks conf=0.97 action=passe
 ### 5. Choose the judge (optional)
 
 ```python
-from taster_ai import FallbackDetector, HeuristicDetector, JevDetector
+from taster_ai import FallbackDetector, InjectionPatterns, JevDetector
 
-Injection(scope=..., judge=FallbackDetector(JevDetector(), HeuristicDetector()))   # Jev, free fallback
+Injection(scope=..., judge=FallbackDetector(JevDetector(), InjectionPatterns()))   # Jev, free fallback
 Constitution(standard=text, judge=ChatOpenAI(model="gpt-4.1-mini", temperature=0)) # your own LLM
 ```
 
-`HeuristicDetector()` is free and needs no key, but only knows injection: it
-ignores the standard, so use it in `Injection` (as a fallback, say).
+`InjectionPatterns()` is free and needs no key, but only judges prompt
+injection: it ignores the standard. Use it in `Injection`, usually as a
+fallback behind Jev.
 
 ### Using deepagents?
 
@@ -308,7 +309,7 @@ own scope or constitution can be talked into switching them off.
 
 | Detector | What it is | Cost |
 |---|---|---|
-| `HeuristicDetector()` | patterns real attacks use: override phrases, fake system/owner messages, hiding things from the user, secrets, directives in HTML comments, invisible Unicode | free, instant, offline |
+| `InjectionPatterns()` | injection only (ignores the standard): patterns real attacks use: override phrases, fake system/owner messages, hiding things from the user, secrets, directives in HTML comments, invisible Unicode | free, instant, offline |
 | `JevDetector()` | [Jev](https://openrouter.ai) decision model via OpenRouter; calibrated probabilities; up to 120,000 characters per check | ~0.2–0.4 s per check |
 | your chat model | any LangChain chat model, wrapped in `LLMDetector` automatically | your model's price and speed |
 | `FallbackDetector(a, b, …)` | try each in order; the first that answers wins | — |
@@ -370,7 +371,7 @@ a `{label, confidence, reason}` answer and gives the model no tools. Still,
 use a model **other than your agent's** (ideally a small one).
 
 **Confidence means different things per detector:** Jev's is a calibrated
-probability, an LLM's is its own estimate, the heuristic's is a fixed score
+probability, an LLM's is its own estimate, InjectionPatterns' is a fixed score
 per number of signals. Tune `threshold` for the detector you use.
 
 ### What the agent sees
@@ -459,7 +460,7 @@ A failing sink is logged and skipped; it never breaks a turn.
 - **Download, then read.** Content an agent saves to a file and reads later
   is only checked if a target covers the reading tool. File provenance
   tracking is planned.
-- **The heuristic can be dodged with quotes.** It ignores text in double
+- **InjectionPatterns can be dodged with quotes.** It ignores text in double
   quotes so articles about injection aren't flagged; an attacker can use that
   to slip past it. Model-based detectors still see quoted text.
 - **The LLM judge's resistance is untested on real models**; its defences are

@@ -35,10 +35,10 @@ def test_target_validation():
 
 
 def test_target_detector_is_a_name_not_an_object():
-    from taster_ai import HeuristicDetector
+    from taster_ai import InjectionPatterns
 
     with pytest.raises(ValueError, match="must be a name"):
-        Target("x", detector=HeuristicDetector())  # type: ignore[arg-type]
+        Target("x", detector=InjectionPatterns())  # type: ignore[arg-type]
 
 
 def test_scope_from_dict_rejects_typos():

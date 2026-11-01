@@ -6,13 +6,13 @@ from __future__ import annotations
 from typing import Any
 
 from .base import Detector, FallbackDetector
-from .heuristic import HeuristicDetector
+from .patterns import InjectionPatterns
 from .jev import JevDetector
 
 __all__ = [
     "Detector",
     "FallbackDetector",
-    "HeuristicDetector",
+    "InjectionPatterns",
     "JevDetector",
     "LLMDetector",
     "as_detector",
