@@ -5,24 +5,42 @@
 Every action is checked before it runs. Every result is checked before it's
 read.
 
-> Status: early alpha (0.2.0.dev0). APIs may change. Not on PyPI yet.
+```bash
+pip install "taster-ai[langchain,yaml] @ git+https://github.com/rinkesh2010rpp/taster-ai@v0.2.0.dev0"
+```
 
-## What it is
+```python
+from taster_ai import Constitution, Injection
+from taster_ai.adapters.langchain import TasterMiddleware
 
-You write the rules for your AI agent in plain English: a constitution, and
-any checks of your own. Taster checks every tool call against them **before
-the tool runs**, and every tool result **before your agent reads it**. A call
-that breaks a rule isn't run. A result that tries to hijack your agent is
-withheld.
+taster = TasterMiddleware(checks=[Constitution(open("constitution.md").read()), Injection()])
+agent = create_agent(model, tools, middleware=[taster])
+```
 
-It's a small Python library you add to a LangChain or deepagents agent as one
-middleware. Its judge is the Jev decision model by default, your own LLM, or
-a judge you write.
+It starts in shadow mode: it logs what it would block and changes nothing
+until you switch it on. **18 of 18** live test cases came out as expected,
+seven of them modelled on real incidents ([Tested live](#tested-live)).
 
-A system prompt asks your agent to follow your rules. Taster checks that it
-does.
+## What you get
 
-## Why it helps
+- **Your rules hold.** Write them in plain English. A call that breaks one
+  isn't run, whether the idea came from your agent's own reasoning or from
+  something it read, and the agent is told which rule it broke.
+- **Attacks never reach your model.** A web page, email or issue that tries
+  to hijack your agent is withheld before the agent reads it, and the agent
+  carries on.
+- **Any boundary you can say in a sentence.** Add your own checks, each with
+  its own tools and strictness. No policy language to learn.
+- **Try it without risk.** Shadow mode shows what it *would* block before it
+  blocks anything.
+- **It never breaks your agent.** If a judge is down or slow, the work goes
+  on, labelled "not screened" (or blocked, if you prefer).
+- **Nothing sensitive is logged.** Records hold a fingerprint of the text,
+  never the text.
+- **Fits your stack.** One middleware for LangChain or deepagents. The judge
+  is Jev by default, your own LLM, or one you write.
+
+## Why you need it
 
 Can you answer these about your agent?
 
@@ -62,9 +80,13 @@ Never touch production.
 Never send private data or credentials to any host except the one that issued them.
 ```
 
-Taster keeps those rules outside the agent. It checks each action against
-them before it runs, and screens each result for prompt injection before the
-agent reads it. It sits between your agent's tools and its model:
+## How it works
+
+A system prompt asks your agent to follow your rules. Taster checks that it
+does. It keeps your rules outside the agent, checks each action against them
+before it runs, and screens each result for prompt injection before the agent
+reads it. It's a small Python library that sits between your agent's tools
+and its model:
 
 ```
 agent decides on a tool call
@@ -102,24 +124,6 @@ checks = [
     ),
 ]
 ```
-
-What that gives you:
-
-- **Rules are kept, whoever suggested breaking them.** A call that breaks
-  your constitution isn't run; the agent is told which checks it failed.
-- **Attacks never reach the model.** A flagged result is replaced by a short
-  note, so the agent carries on and can tell the user why.
-- **Any boundary you can put in words.** Write your own check with its own
-  standard; no policy language to learn.
-- **You choose what is checked.** Each check has its own scope: which tools,
-  at which stage, how strictly.
-- **Try it without risk.** Shadow mode checks and logs everything but changes
-  nothing, so you can see what it *would* block before turning it on.
-- **It never breaks your agent.** If a judge is down or slow, the result is
-  labelled "not screened" (or blocked, if you prefer), and a chain of
-  detectors can take over.
-- **Nothing sensitive is logged.** Records hold a fingerprint of the text,
-  never the text.
 
 ## Tested live
 
@@ -186,7 +190,7 @@ a dev install).
 
 ### 1. Install
 
-Not on PyPI yet; install from GitHub, pinned to a release:
+Install from GitHub, pinned to a release:
 
 ```bash
 pip install "taster-ai[langchain,yaml] @ git+https://github.com/rinkesh2010rpp/taster-ai@v0.2.0.dev0"
