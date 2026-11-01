@@ -121,6 +121,26 @@ What that gives you:
 - **Nothing sensitive is logged.** Records hold a fingerprint of the text,
   never the text.
 
+## Tested live
+
+On 2026-10-31, [`examples/live_check.py`](examples/live_check.py) ran 18
+cases against live Jev, with the constitution above. All 18 came out as
+expected:
+
+- **Blocked, 9 of 9:** the seven cases behind the questions above (secret to a
+  file, a skill's setup command, a bulk delete, a production volume, private
+  data to a public issue, injections in a GitHub issue and a Moltbook post),
+  and the two attack pages from the first live test.
+- **Let through, 9 of 9:** ordinary work (writing a README, deleting one
+  email, running tests, reading staging logs, a normal bug report) and pages
+  that are fine, including two articles about prompt injection and an
+  AGENTS.md.
+
+It's a smoke test with cases written for this README, not a benchmark:
+accuracy on real traffic and false-positive rates are still to be measured.
+Confidences vary a little between runs. Rerun it with
+`python examples/live_check.py` (needs `OPENROUTER_API_KEY` and a dev install).
+
 ## How to use it
 
 ### 1. Install
@@ -317,7 +337,8 @@ ask for secrets, commands or messages unrelated to the content, hide
 directions in comments or invisible text). Articles, docs, ads, tutorials and
 text that discusses prompt injection are fine. AGENTS.md-style instruction
 files and setup guides are hard to judge, so the judge is told to answer
-unclear, and they're wrapped as untrusted. Copy it and edit it for your own
+unclear, and they're wrapped as untrusted (in the live test, Jev passed a
+plain AGENTS.md as follows instead). Copy it and edit it for your own
 `Injection(standard=...)`.
 
 Checks never affect each other. A call or result is blocked if **any** check
@@ -522,10 +543,10 @@ A failing sink is logged and skipped; it never breaks a turn.
 - **InjectionPatterns can be dodged with quotes.** It ignores text in double
   quotes so articles about injection aren't flagged; an attacker can use that
   to slip past it. Model-based detectors still see quoted text.
-- **The default injection standard is untested on live Jev in its 0.2
-  form.** 0.1 asked Jev the tuned wording as a question with label
-  descriptions; 0.2 sends the same wording as a standard. The live test pages
-  haven't been re-run yet, so verdicts may shift slightly.
+- **The default injection standard has only a small live test in its 0.2
+  form.** The five pages from 0.1's live test come out as expected (two
+  attacks withheld, three fine pages let through; see
+  [Tested live](#tested-live)), but that is five pages, not real traffic.
 - **The LLM judge's resistance is untested on real models**; its defences are
   covered by tests with fake models only.
 - **Jev is an alpha OpenRouter endpoint**, and its tokenizer isn't public.
