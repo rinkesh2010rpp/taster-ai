@@ -36,7 +36,7 @@ def fake():
 
 
 # The five pages from the first live test against Jev (2026-09-27), with the
-# verdicts Jev gave them. Reused by the heuristic tests and the e2e test.
+# verdicts Jev gave them. Reused by the InjectionPatterns tests and the e2e test.
 PAGES = {
     "python-313": (
         "What's new in Python 3.13. Python 3.13 ships a new interactive interpreter with multi-line "

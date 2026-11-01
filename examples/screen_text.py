@@ -1,9 +1,9 @@
 """Check some text and a tool call directly, without an agent.
 
 Runs offline: Jev is tried first and, with no OPENROUTER_API_KEY set, the
-free heuristic answers the injection check instead (the constitution check
-then can't be answered, so the call goes through, labelled). Set the key to
-see Jev's verdicts.
+free InjectionPatterns answers the injection check instead (the constitution
+check then can't be answered, so the call goes through, labelled). Set the
+key to see Jev's verdicts.
 
     python examples/screen_text.py
 """
@@ -11,8 +11,8 @@ see Jev's verdicts.
 from taster_ai import (
     Constitution,
     FallbackDetector,
-    HeuristicDetector,
     Injection,
+    InjectionPatterns,
     JevDetector,
     Scope,
     Screener,
@@ -25,7 +25,7 @@ screener = Screener(
     [
         Injection(
             Scope(tool_result=[Target("*", mode="enforce")]),
-            judge=FallbackDetector(jev, HeuristicDetector()),
+            judge=FallbackDetector(jev, InjectionPatterns()),
         ),
         Constitution(
             "Never write secrets, API keys or tokens to files.",

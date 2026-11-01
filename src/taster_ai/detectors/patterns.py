@@ -1,15 +1,17 @@
-"""A free, instant, offline detector for the obvious attacks.
+"""InjectionPatterns: a free, instant, offline judge for the obvious
+prompt injections.
 
 It looks for a handful of patterns that real injections almost always use:
 override phrases, fake system/owner messages, text addressed to "the AI
 reading this", requests to hide things from the user or send secrets,
 directives hidden in HTML comments, and invisible Unicode tag characters.
 
-It only knows prompt injection: it ignores the standard it is given, so use
-it in an Injection check (as a fallback, say), not to judge your own
-standards. It is a baseline, not a replacement for a model-based judge: it misses paraphrased attacks, and its judgment of one pattern on
-its own is only "unclear". Text inside double quotes is ignored, so an
-article that *quotes* "ignore all previous instructions" isn't flagged.
+It only judges prompt injection: it ignores the standard it is given. Use
+it in an Injection check, usually as a fallback behind Jev, never to judge
+your own standards. It is a baseline, not a replacement for a model-based
+judge: it misses paraphrased attacks, and one pattern on its own is only
+"unclear". Text inside double quotes is ignored, so an article that
+*quotes* "ignore all previous instructions" isn't flagged.
 """
 
 from __future__ import annotations
@@ -67,11 +69,11 @@ def _hits(text: str) -> set[str]:
     return {name for name, pattern in PATTERNS.items() if pattern.search(text)}
 
 
-class HeuristicDetector(Detector):
-    """Pattern-based injection judge: 0 signals -> follows, 1 -> unclear, 2+ ->
-    breaks. Ignores the standard."""
+class InjectionPatterns(Detector):
+    """Pattern matching for prompt injection: 0 signals -> follows, 1 ->
+    unclear, 2+ -> breaks. Ignores the standard: use it in Injection only."""
 
-    name = "heuristic"
+    name = "injection-patterns"
     max_chars = 200_000  # no model behind it, so no need to chunk
 
     def detect(self, text: str, standard: str = "") -> Verdict:

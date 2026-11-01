@@ -57,10 +57,11 @@ class FallbackDetector(Detector):
     """Try detectors in order; the first one that gives a verdict wins.
 
     Typical use: a strong remote detector first, a cheaper one behind it,
-    and the free heuristic last, so an outage still catches the obvious
-    attacks instead of passing everything through unscreened.
+    and the free InjectionPatterns last in an Injection check, so an
+    outage still catches the obvious attacks instead of passing everything
+    through unscreened.
 
-        FallbackDetector(JevDetector(), my_chat_model, HeuristicDetector())
+        FallbackDetector(JevDetector(), my_chat_model, InjectionPatterns())
 
     Chat models are wrapped in LLMDetector automatically.
     """
