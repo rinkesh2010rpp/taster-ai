@@ -13,8 +13,9 @@ results, files, emails, command output) for prompt injection **before your
 agent reads it**, and withholds the poisoned ones.
 
 It's a small Python library you add to a LangChain or deepagents agent as one
-middleware. It works with a free built-in detector, with the Jev decision
-model, or with your own LLM as the judge.
+middleware. Its judge is the Jev decision model by default, your own LLM, or
+a judge you write; a free built-in one (`InjectionPatterns`) catches the
+obvious injections offline.
 
 Other tools guard your computer from your agent. Taster guards your agent from
 what it reads, and from doing what you said it must not.
@@ -206,8 +207,8 @@ TasterMiddleware(
 TasterMiddleware.from_yaml("taster.yaml", sinks=[...])
 ```
 
-Outside an agent framework, `Screener` takes the same arguments:
-`Screener([...checks]).screen_call("write_file", args)` before a tool runs
+Outside an agent framework, use `Screener` with the same checks, sinks and
+messages: `Screener([...checks]).screen_call("write_file", args)` before a tool runs
 and `.screen_result("read_email", args, text)` after; each returns an
 `Outcome` (or `None` if no check runs on it), with `.blocked`, `.message()`,
 `.render(content)` and every check's `.decisions`.
@@ -254,7 +255,7 @@ every short argument plus one overlapping window of a long one, so nothing
 is cut out of the middle. A judge keeps no standard of its own, so one judge
 (say one `JevDetector(timeout=2)`) can serve every check.
 
-The default injection standard, `taster_ai.standards.INJECTION_STANDARD`, is
+The default injection standard, `taster_ai.INJECTION_STANDARD`, is built from
 the wording tuned against Jev on live pages. In short: a tool result must
 not try to hijack the agent (override its instructions, pose as its owner,
 ask for secrets, commands or messages unrelated to the content, hide
@@ -338,6 +339,8 @@ OpenRouter shows for your calls; `max_chars` is the chunk size.
 Verdict`. Mix whatever you like inside it (patterns, a model, a lookup):
 
 ```python
+from taster_ai import Detector, LLMDetector, Verdict
+
 class MyJudge(Detector):
     name = "regex+llm"
 
@@ -428,7 +431,7 @@ confidence, detector, action, `would_action`, latency and a hash of the text
 ```python
 from taster_ai import print_sink, log_sink, JsonlSink, BackgroundSink
 
-sinks=[print_sink]                             # one printed line per call
+sinks=[print_sink]                             # one printed line per check per call
 sinks=[JsonlSink("logs/taster")]               # full record, one file per day per process
 sinks=[print_sink, BackgroundSink(to_slack)]   # slow sinks run off the agent's path
 sinks=[]                                       # nothing (default is [log_sink])
@@ -451,7 +454,8 @@ A failing sink is logged and skipped; it never breaks a turn.
   too long is halved and checked again. Results too long to check fully
   count as unscreenable rather than half-checked (with Jev, past ~950,000
   characters).
-- **Repeats are cheap:** verdicts are cached by text hash.
+- **Repeats are cheap:** verdicts are cached by judge, standard and text
+  hash, so the same page checked twice is judged once.
 - **The core has no dependencies.** LangChain is needed only for the
   middleware and `LLMDetector`.
 
@@ -463,6 +467,10 @@ A failing sink is logged and skipped; it never breaks a turn.
 - **InjectionPatterns can be dodged with quotes.** It ignores text in double
   quotes so articles about injection aren't flagged; an attacker can use that
   to slip past it. Model-based detectors still see quoted text.
+- **The default injection standard is untested on live Jev in its 0.2
+  form.** 0.1 asked Jev the tuned wording as a question with label
+  descriptions; 0.2 sends the same wording as a standard. The live test pages
+  haven't been re-run yet, so verdicts may shift slightly.
 - **The LLM judge's resistance is untested on real models**; its defences are
   covered by tests with fake models only.
 - **Jev is an alpha OpenRouter endpoint**, and its tokenizer isn't public.
@@ -482,9 +490,12 @@ A failing sink is logged and skipped; it never breaks a turn.
 
 ## Roadmap
 
-- **0.2** — local PromptGuard 2 detector, voting ensembles, a public benchmark
-  with false-positive rates
-- **0.3** — file provenance tracking, an MCP proxy that screens any MCP server
+- **Done in 0.2** — checks on tool calls as well as results (`Injection`,
+  `Constitution`, your own `Check`), each with its own scope and standard
+- **Next** — a local PromptGuard 2 judge, voting ensembles, a public
+  benchmark with false-positive rates
+- **Later** — file provenance tracking, an MCP proxy that screens any MCP
+  server
 
 ## Development
 

@@ -8,9 +8,9 @@ the returned outcome.
 For each check whose scope has the stage, the first matching target picks
 the mode; the text is split into pieces the judge can take, each piece is
 judged against the check's standard (in parallel, cached by judge, standard
-and text), and the most suspicious verdict wins. Checks
-never affect each other: a call or result is blocked if any check in
-enforce mode blocks it, and the agent is told every check that did.
+and text), and the most suspicious verdict wins. Checks never affect each
+other: a call or result is blocked if any check in enforce mode blocks it,
+and the agent is told every check that did.
 """
 
 from __future__ import annotations
