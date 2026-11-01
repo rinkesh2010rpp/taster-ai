@@ -5,22 +5,6 @@
 Every action is checked before it runs. Every result is checked before it's
 read.
 
-```bash
-pip install "taster-ai[langchain,yaml] @ git+https://github.com/rinkesh2010rpp/taster-ai@v0.2.0.dev0"
-```
-
-```python
-from taster_ai import Constitution, Injection
-from taster_ai.adapters.langchain import TasterMiddleware
-
-taster = TasterMiddleware(checks=[Constitution(open("constitution.md").read()), Injection()])
-agent = create_agent(model, tools, middleware=[taster])
-```
-
-It starts in shadow mode: it logs what it would block and changes nothing
-until you switch it on. **18 of 18** live test cases came out as expected,
-seven of them modelled on real incidents ([Tested live](#tested-live)).
-
 ## What you get
 
 - **Your rules hold.** Write them in plain English. A call that breaks one
