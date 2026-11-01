@@ -1,4 +1,4 @@
-"""Where screening records go. A sink is any callable taking one dict.
+"""Where check records go. A sink is any callable taking one dict.
 
 Sinks run in line, before the model sees the result. Fast ones (the built-in
 JSONL, log and print sinks) cost microseconds; wrap a slow one (a network
@@ -23,7 +23,7 @@ logger = logging.getLogger("taster_ai")
 
 
 class JsonlSink:
-    """Appends one JSON line per screened call to <directory>/<date>-<id>.jsonl.
+    """Appends one JSON line per check per call to <directory>/<date>-<id>.jsonl.
 
     Each process writes its own file, so several workers sharing a directory
     (or a network volume) never write to the same file.
