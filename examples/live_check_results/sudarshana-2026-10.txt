@@ -1,0 +1,30 @@
+Taster in production on Sudarshana, 2026-09-27 to 2026-10-22
+
+Agent:    Sudarshana (github.com/rinkesh2010rpp/sudarshana), a deepagents agent
+          on Modal that wakes every hour
+Code:     taster-ai 0.1 dev releases (0.1.0.dev3 from 2026-10-10), screening tool results
+          for prompt injection; no checks on tool calls
+Judge:    Jev via OpenRouter
+Source:   Sudarshana's tool-screen JSONL records (118 files). Records hold a
+          fingerprint of each result, never its text, so these are counts only.
+
+Records:            1,092 tool results over 26 days
+By tool:            execute 583 · search_web 495 · send_agent_task (A2A replies) 14
+Text screened:      1,506,526 characters; largest single result 56,525
+Mode:               enforce 1,086 · shadow 6
+Judge latency:      median 0.24 s, 90th percentile 0.40 s (1,081 Jev checks)
+Judge failures:     0
+
+Flagged:            6 records, on 2026-09-27 and 2026-09-28: the same two
+                    results (608 and 593 characters), the two attack pages
+                    planted to test the screen, fetched three times: once in
+                    shadow mode (would have withheld), then twice in enforce
+                    mode (withheld).
+Everything else:    1,086 results passed; none flagged
+
+Why it stops on 2026-10-22: from then on every run hit the OpenRouter credit
+limit before making a tool call, so there was nothing to screen.
+
+What this shows: the screen ran on real traffic without failing or raising
+false alarms. What it doesn't: whether any real attacks were among the 1,086
+results, since there's no ground truth for them.

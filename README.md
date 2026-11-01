@@ -145,6 +145,23 @@ What it shows, and what it doesn't:
 Rerun it with `python examples/live_check.py` (needs `OPENROUTER_API_KEY` and
 a dev install).
 
+### In production
+
+From 27 September to 22 October 2026, Taster 0.1 screened every shell output,
+web search and agent-to-agent reply that
+[Sudarshana](https://github.com/rinkesh2010rpp/sudarshana), an autonomous
+agent that runs itself every hour, read:
+
+- **1,092 tool results** over 26 days, about 1.5 million characters
+- **median 0.24 s** per check (90th percentile 0.40 s), with no judge failures
+- **It caught both planted attack pages, with no false alarms** on the other
+  1,086 results
+
+That's one agent, screening results for prompt injection only, so it shows
+Taster runs reliably on real traffic, not how often real attacks happen. The
+counts are in
+[`examples/live_check_results/sudarshana-2026-10.txt`](examples/live_check_results/sudarshana-2026-10.txt).
+
 ## Quickstart
 
 ```bash
