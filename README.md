@@ -29,19 +29,6 @@ Never touch production.
 Never send private data or credentials to any host except the one that issued them.
 ```
 
-## What you get
-
-- **Any boundary you can say in a sentence.** Add your own checks, each with
-  its own tools and strictness. No policy language to learn.
-- **Try it without risk.** Shadow mode shows what it *would* block before it
-  blocks anything.
-- **It never breaks your agent.** If a judge is down or slow, the work goes
-  on, labelled "not screened" (or blocked, if you prefer).
-- **Nothing sensitive is logged.** Records hold a fingerprint of the text,
-  never the text.
-- **Fits your stack.** One middleware for LangChain or deepagents. The judge
-  is Jev by default, your own LLM, or one you write.
-
 ## How it works
 
 A system prompt asks your agent to follow your rules. Taster checks that it
@@ -86,6 +73,14 @@ checks = [
     ),
 ]
 ```
+
+## Safe to try
+
+- **Shadow mode first.** It logs what it would block and changes nothing until you switch it on.
+- **It never breaks your agent.** If the judge is down or slow, the work goes on.
+- **Nothing sensitive is logged.** Only a fingerprint of the text, never the text.
+- **Fits your stack.** One middleware for LangChain or deepagents; Jev, your own LLM or your own judge.
+- **Your own rules too.** Any boundary you can say in a sentence; no policy language.
 
 ## Tested live
 
