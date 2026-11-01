@@ -2,6 +2,9 @@
 
 **Your agent keeps your rules, even when you're not watching.**
 
+Every action is checked before it runs. Every result is checked before it's
+read.
+
 > Status: early alpha (0.2.0.dev0). APIs may change. Not on PyPI yet.
 
 ## What it is
