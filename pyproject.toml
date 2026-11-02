@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "taster-ai"
 version = "0.2.0.dev0"
-description = "Your agent keeps your rules: checks every tool call against your plain-English constitution before it runs, and every tool result for prompt injection before the agent reads it."
+description = "Keep your customers' trust in your AI agent: checks every tool call against your plain-English constitution before it runs, and every tool result for prompt injection before the agent reads it."
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.10"

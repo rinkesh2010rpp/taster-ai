@@ -1,16 +1,17 @@
 # Taster
 
-**Your agent keeps your rules, even when you're not watching.**
+**Trust takes months to build and one agent action to lose.**
 
-Every action is checked before it runs. Every result is checked before it's
-read.
+Taster checks everything that goes into and out of your AI agent against your
+constitution, so that one action never runs.
 
-[Quickstart](#quickstart) · [Guide](docs/guide.md) · [Reference](docs/reference.md) · [Tested live](#tested-live)
+[Quickstart](#quickstart) · [Agent skill](#let-your-coding-agent-set-it-up) · [Guide](docs/guide.md) · [Reference](docs/reference.md) · [Tested live](#tested-live)
 
 ## Why you need it
 
-Agents break rules they were given, or get talked out of them by what they
-read. Each of these happened:
+Agents aren't malicious. They chase the goal you gave them, by whatever route
+they can find, and some of those routes break your customers' trust. Others
+get talked into it by what they read. Each of these happened:
 
 | What happened | Why the rule failed | What Taster does | [Live test](#tested-live) |
 |---|---|---|---|
@@ -21,7 +22,8 @@ read. Each of these happened:
 | [About 2.6% of sampled Moltbook posts](https://www.vectra.ai/blog/moltbook-and-the-illusion-of-harmless-ai-agent-communities) hid instructions for the agents reading them | Same: text read as orders | Withholds the post | blocked |
 
 The rule lived inside the agent, where it can be forgotten, ignored or argued
-away. With Taster it lives outside, as plain sentences in your constitution:
+away. With Taster it lives outside, as plain-English principles in your
+constitution:
 
 ```markdown
 Store secrets only in environment variables, never in files.
@@ -33,11 +35,16 @@ Never send private data or credentials to any host except the one that issued th
 
 ## How it works
 
-A system prompt asks your agent to follow your rules. Taster checks that it
-does. It keeps your rules outside the agent, checks each action against them
-before it runs, and screens each result for prompt injection before the agent
-reads it. It's a small Python library that sits between your agent's tools
-and its model:
+Like a royal taster, who tasted the king's food before he ate, Taster sits
+between your agent and its tools. A system prompt asks your agent to follow
+your principles; Taster checks that it does. It reasons about whether each
+action aligns with your constitution before it runs, and screens each result
+for prompt injection before the agent reads it. Rule engines match patterns
+(`rm -rf`) and miss the same intent phrased differently (`railway volume
+delete`); Taster judges what the action means.
+
+It's a small Python library that sits between your agent's tools and its
+model:
 
 ```
 agent decides on a tool call
@@ -191,6 +198,21 @@ LangChain 1.x.
 Next: the [guide](docs/guide.md) (narrowing checks to tools, YAML config,
 choosing a judge, deepagents) and the [reference](docs/reference.md) (every
 option).
+
+### Let your coding agent set it up
+
+[`skills/taster/SKILL.md`](skills/taster/SKILL.md) is an
+[Agent Skill](https://agentskills.io) that walks a coding agent (Claude Code,
+Codex, Cursor and others that read skills) through adding Taster: finding
+your agent, drafting a constitution with you, wiring the middleware in shadow
+mode and checking it runs. For Claude Code:
+
+```bash
+mkdir -p .claude/skills/taster
+curl -fsSL https://raw.githubusercontent.com/rinkesh2010rpp/taster-ai/main/skills/taster/SKILL.md -o .claude/skills/taster/SKILL.md
+```
+
+Then ask: *"Add Taster to my agent."*
 
 ## Limits
 
