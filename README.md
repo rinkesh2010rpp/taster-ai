@@ -225,7 +225,8 @@ cd your-project
 taster init claude-code
 ```
 
-Then write your rules in `.taster/constitution.md`, and see what happened with
+If `taster` isn't found, run `pipx ensurepath` and open a new terminal. Then
+write your rules in `.taster/constitution.md`, and see what happened with
 `taster report`. Read the [Claude Code guide](docs/claude-code.md) for scope,
 enforce mode, speed and limits. To have Claude Code set it up for you, use the
 [`taster-claude-code` skill](skills/taster-claude-code/SKILL.md):

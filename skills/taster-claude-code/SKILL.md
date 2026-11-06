@@ -43,7 +43,8 @@ instead. This is experimental, and it's tested on Windows only; say so.
    pipx install "taster-ai[claude-code] @ git+https://github.com/rinkesh2010rpp/taster-ai"
    ```
 
-   Needs Python 3.10+. `pip install` works too.
+   Needs Python 3.10+. `pip install` works too. If `taster` isn't found
+   afterwards, run `pipx ensurepath`, then use a new terminal.
 
 3. **Set up the project**, from its root:
 

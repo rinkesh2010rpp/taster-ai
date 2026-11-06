@@ -16,6 +16,9 @@ pipx install "taster-ai[claude-code] @ git+https://github.com/rinkesh2010rpp/tas
 
 Needs Python 3.10+. `pip install` works too.
 
+If `taster` isn't found afterwards, run `pipx ensurepath` and open a new
+terminal.
+
 
 ## 2. Set up a project
 
@@ -178,8 +181,9 @@ research history. Your numbers will differ.
   another user.
 - **If the hook fails, the call goes ahead.** That includes a broken
   `taster.yaml`, even for tools in enforce mode. Add `"onFailure": "block"` to
-  the hook in your settings to change that, but it applies to every tool, so a
-  stopped service then blocks everything. That setting hasn't been tested yet.
+  the hook in your settings to change that (needs Claude Code 2.1.295 or
+  later), but it applies to every tool, so a stopped service then blocks
+  everything. That setting hasn't been tested yet.
 - **Haiku's confidence is rough.** It ranged from 0.7 to 0.97 on clear breaks.
 - **Tested on Windows only.** Not yet tested on Mac or Linux, with real MCP
   tools, or with judges left idle for long periods.
@@ -192,6 +196,19 @@ research history. Your numbers will differ.
 
 ## Removing it
 
-Delete the Taster entries from `hooks` and `permissions.deny` in
-`.claude/settings.local.json`, then delete `.taster/`. A backup of your earlier
-settings is at `.claude/settings.local.json.taster-backup`.
+1. Delete the Taster entries from `hooks` and `permissions.deny` in
+   `.claude/settings.local.json`. If the project had a settings file before,
+   your earlier version is at `.claude/settings.local.json.taster-backup`. If
+   it didn't, there's no backup, and you can delete the file if nothing else
+   is in it.
+2. Delete `.taster/`.
+3. Uninstall the package, if no other project uses it:
+
+   ```bash
+   pipx uninstall taster-ai
+   ```
+
+   Use `pip uninstall taster-ai` if you installed it with pip.
+
+The background service exits on its own after 30 idle minutes. Once it has,
+you can delete `~/.taster/` too.
