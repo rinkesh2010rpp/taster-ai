@@ -15,7 +15,9 @@ Repo: https://github.com/rinkesh2010rpp/taster-ai
 The project builds an agent with LangChain 1.x (`create_agent`) or deepagents
 (`create_deep_agent`) and the owner wants it to stay within limits: no
 deleting production, no leaking secrets, no following instructions hidden in
-web pages. Other frameworks aren't supported yet; say so rather than forcing it.
+web pages. To check Claude Code itself rather than an agent you're building, use
+the `taster-claude-code` skill. Other frameworks aren't supported yet; say so
+rather than forcing it.
 
 ## Steps
 

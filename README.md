@@ -5,7 +5,7 @@
 Taster checks everything that goes into and out of your AI agent against your
 constitution, so that one action never runs.
 
-[Quickstart](#quickstart) · [Agent skill](#let-your-coding-agent-set-it-up) · [Guide](docs/guide.md) · [Reference](docs/reference.md) · [Tested live](#tested-live)
+[Quickstart](#quickstart) · [Agent skill](#let-your-coding-agent-set-it-up) · [Guide](docs/guide.md) · [Claude Code](docs/claude-code.md) · [Reference](docs/reference.md) · [Tested live](#tested-live)
 
 ## Why you need it
 
@@ -216,43 +216,27 @@ Then ask: *"Add Taster to my agent."*
 
 ### Claude Code (experimental)
 
-Check Claude Code's own tool calls through a hook. It needs no API key: the
-judge is the Claude Code CLI on your own login, so checks count against your
-Claude plan. Use it on your own machine, with Claude Code installed and logged in.
+Check Claude Code's own tool calls through a hook, with no API key: the judge
+is the Claude Code CLI on your own login.
 
 ```bash
-pip install "taster-ai[claude-code] @ git+https://github.com/rinkesh2010rpp/taster-ai"
+pipx install "taster-ai[claude-code] @ git+https://github.com/rinkesh2010rpp/taster-ai"
 cd your-project
 taster init claude-code
 ```
 
-That adds a hook to `.claude/settings.local.json`, keeping any hooks you have,
-and creates `.taster/` with a sample scope (`taster.yaml`) and sample rules
-(`constitution.md`). Write your own rules, then use Claude Code as normal.
+If `taster` isn't found, run `pipx ensurepath` and open a new terminal. Then
+write your rules in `.taster/constitution.md`, and see what happened with
+`taster report`. Read the [Claude Code guide](docs/claude-code.md) for scope,
+enforce mode, speed and limits. To have Claude Code set it up for you, use the
+[`taster-claude-code` skill](skills/taster-claude-code/SKILL.md):
 
 ```bash
-taster report                    # what was judged, and what would be blocked
-taster report --export log.jsonl # the records, to share; read it first
+mkdir -p .claude/skills/taster-claude-code
+curl -fsSL https://raw.githubusercontent.com/rinkesh2010rpp/taster-ai/main/skills/taster-claude-code/SKILL.md -o .claude/skills/taster-claude-code/SKILL.md
 ```
 
-Everything starts in shadow mode. To block, set `mode: enforce` on a tool in
-`taster.yaml`, with `on_error: block` and `threshold: 0.6`. The hook starts a
-small background service for each project, which keeps a few judges ready and
-exits after 30 idle minutes.
-
-- **Speed:** about 0.35 s per tool call for the hook, on one Windows PC. In
-  shadow mode that's all the agent waits. In enforce mode a checked call also
-  waits for the judge, about 2 s, and longer in a burst.
-- **Confidence is rough.** Haiku's confidence varied from 0.7 to 0.97 on clear
-  breaks, so the default threshold of 0.85 let some through. `taster report`
-  lists breaks below the threshold.
-- **It protects against mistakes and common attacks, not a determined one.**
-  The agent runs as you, so a hijacked agent could stop the service or change
-  the files in `.taster/` through a script. A deny rule covers Claude's file
-  tools; for a hard guarantee, run the agent in a sandbox or as another user.
-- **If the hook fails, the call goes ahead**, unless you add
-  `"onFailure": "block"` to the hook setting. That applies to every tool, so a
-  stopped service then blocks everything.
+Then ask: *"Set up Taster for Claude Code here."*
 
 ## Limits
 
