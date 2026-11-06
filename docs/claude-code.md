@@ -159,6 +159,17 @@ hooks and no project settings, and answers once, so one call can't sway the
 verdict on the next.
 
 
+## What leaves your machine
+
+Taster is an open-source package, not a service. It doesn't collect anything,
+and it has no servers.
+
+The judge runs on your own Claude login, so checks go to Anthropic under your
+account, the same way Claude Code's own requests do. That includes your rules
+and the tool calls being judged. If that text can't leave your machine, don't
+use this judge on that data until there's a local option.
+
+
 ## Speed
 
 Measured on one Windows PC:
