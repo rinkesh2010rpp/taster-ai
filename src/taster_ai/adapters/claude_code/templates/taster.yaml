@@ -1,9 +1,11 @@
 # Which tool calls Taster checks, and how strictly.
 #
 # A rule only applies to the tools listed here: nothing else is judged. This
-# sample covers things leaving your machine, to match the sample rules. If you
-# add a rule about deleting data, add the tools that delete: Write, Edit, and
-# Bash with when_args: { command: '\b(rm|rmdir)\b' }.
+# sample covers the common ways things leave your machine, to match the sample
+# rules. It's a list of patterns, so it can't catch everything: a script that
+# sends data, or a command it doesn't name, goes unjudged. Add what your agent
+# uses. If you add a rule about deleting data, add the tools that delete:
+# Write, Edit, and Bash with when_args: { command: '\b(rm|rmdir)\b' }.
 #
 # Every judged call uses your Claude plan, so list the tools that can do harm,
 # not every tool.
@@ -30,6 +32,8 @@ checks:
         - { tool: "mcp__*calendar*", mode: shadow }
         - { tool: "mcp__*message*", mode: shadow }
         - { tool: "mcp__*send*", mode: shadow }
+        - { tool: WebFetch, mode: shadow }
         - tool: Bash
           mode: shadow
-          when_args: { command: '\b(curl|wget|ssh|scp|rsync|nc|sendmail)\b' }
+          when_args:
+            command: '\b(curl|wget|ssh|scp|rsync|nc|sendmail|gh|aws|gcloud|requests|urllib|httpx)\b|\bgit\b.*\b(push|remote)\b|\b(npm|pnpm|yarn|twine|cargo)\b.*\bpublish\b'
