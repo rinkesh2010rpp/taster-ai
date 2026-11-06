@@ -507,3 +507,44 @@ def test_the_service_exits_when_idle_and_cleans_up(project, monkeypatch, tmp_pat
     assert not thread.is_alive()
     assert hook.read_runtime(str(project)) is None
     assert any(r.get("event") == "service-stop" for r in records(project))
+
+
+def test_a_broken_config_on_first_start_gives_a_quick_error_then_heals(project, monkeypatch):
+    def broken(_path):
+        raise ValueError("bad yaml")
+
+    monkeypatch.setattr(serve, "checks_from_yaml", broken)
+    service = serve.Service(str(project))
+    with pytest.raises(ValueError, match="bad yaml"):
+        service.handle(CALL)
+    assert any(r.get("event") == "config-error" for r in records(project))
+
+    fixed = [Constitution("r", Scope(tool_call=[Target("send_*", mode="enforce")]), FakeJudge())]
+    monkeypatch.setattr(serve, "checks_from_yaml", lambda _p: fixed)
+    (project / ".taster" / "constitution.md").write_text("fixed")
+    assert "deny" in service.handle(CALL)
+
+
+def test_a_service_that_dies_starting_fails_fast_and_frees_the_lock(project, monkeypatch, tmp_path):
+    monkeypatch.setattr(hook, "state_folder", lambda: str(tmp_path / "run"))
+
+    class Dead:
+        def poll(self):
+            return 1
+
+    def start(_project):
+        os.makedirs(hook.state_folder(), exist_ok=True)
+        open(hook.runtime_path(str(project)) + ".lock", "w").close()
+        return Dead()
+
+    monkeypatch.setattr(hook, "start_service", start)
+    began = time.monotonic()
+    with pytest.raises(OSError, match="stopped while starting"):
+        hook.ask(str(project), b"{}")
+    assert time.monotonic() - began < 2
+    assert not os.path.exists(hook.runtime_path(str(project)) + ".lock")
+
+
+def test_the_sample_rules_only_cover_what_the_sample_scope_checks():
+    assert "delete" not in install.template("constitution.md").lower()
+    assert "rm|rmdir" in install.template("taster.yaml")

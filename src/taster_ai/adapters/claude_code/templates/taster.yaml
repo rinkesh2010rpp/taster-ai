@@ -1,7 +1,12 @@
 # Which tool calls Taster checks, and how strictly.
 #
-# Tools not listed here are not judged. Every judged call uses your Claude
-# plan, so list the tools that can do harm, not every tool.
+# A rule only applies to the tools listed here: nothing else is judged. This
+# sample covers things leaving your machine, to match the sample rules. If you
+# add a rule about deleting data, add the tools that delete: Write, Edit, and
+# Bash with when_args: { command: '\b(rm|rmdir)\b' }.
+#
+# Every judged call uses your Claude plan, so list the tools that can do harm,
+# not every tool.
 #
 # mode: shadow    checked and logged, nothing blocked (start here)
 # mode: enforce   blocked when the judge says it breaks your rules

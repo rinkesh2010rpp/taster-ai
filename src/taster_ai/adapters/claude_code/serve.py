@@ -64,6 +64,7 @@ class Service:
         self.background = ThreadPoolExecutor(max_workers=background_workers)
         self.screener: Screener | None = None
         self.rules = ""
+        self.config_error = ""
         self.pending = 0
         self.last_used = time.monotonic()
         self._lock = threading.Lock()
@@ -80,7 +81,9 @@ class Service:
 
     def load(self) -> None:
         """Read the config, again whenever a file in it changes. A broken
-        edit keeps the last good checks and is logged."""
+        edit keeps the last good checks and is logged. With no good checks
+        yet the service still runs, so every call gets a quick error rather
+        than a slow failed start, and fixing the file is enough."""
         stamp = self._stamp()
         if stamp == self._loaded:
             return
@@ -93,12 +96,12 @@ class Service:
             screener = Screener(checks, sinks=[self.log])
         except Exception as e:
             self._loaded = stamp
-            self.log({"event": "config-error", "error": f"{type(e).__name__}: {e}"})
-            if self.screener is None:
-                raise
+            self.config_error = f"{type(e).__name__}: {e}"
+            self.log({"event": "config-error", "error": self.config_error})
             return
         self.close_judges()
         self.screener, self._loaded, self.rules = screener, stamp, digest.hexdigest()[:12]
+        self.config_error = ""
         self.warm()
 
     def judges(self) -> list[Any]:
@@ -134,6 +137,8 @@ class Service:
         """What the hook prints: "" for no opinion, or a deny."""
         self.last_used = time.monotonic()
         self.load()
+        if self.screener is None:
+            raise ValueError(f".taster/taster.yaml can't be loaded: {self.config_error}")
         tool = str(event.get("tool_name", ""))
         args = event.get("tool_input")
         args = args if isinstance(args, dict) else {}

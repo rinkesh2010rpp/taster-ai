@@ -68,7 +68,7 @@ def summary(records: Iterable[dict[str, Any]], sample_rules: bool = False) -> st
     if len(rules) > 1:
         warnings.append(f"the rules or scope changed {len(rules) - 1} time(s) in this period")
     if events["config-error"]:
-        warnings.append(f"{events['config-error']} config error(s): the last good rules stayed in use")
+        warnings.append(f"{events['config-error']} config error(s): rules from before the error, if any, stayed in use")
     if events["dropped"]:
         warnings.append(f"{events['dropped']} call(s) not judged: too many were waiting")
     if events["service-start"] > events["service-stop"] + 1:

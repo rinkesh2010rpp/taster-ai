@@ -24,7 +24,7 @@ CONFIG = os.path.join(".taster", "taster.yaml")
 #: How long to wait for the service to answer. Below the hook's own timeout,
 #: so a stuck service is reported here rather than as a cancelled hook.
 REPLY_TIMEOUT = 50.0
-START_TIMEOUT = 20.0
+START_TIMEOUT = 10.0
 STALE_LOCK_S = 30.0
 
 
@@ -82,9 +82,10 @@ def exchange(runtime: dict, event: bytes) -> str:
     return body
 
 
-def start_service(project: str) -> None:
-    """Start the service detached, so it outlives this process. A lock file
-    stops two calls arriving together from starting two services."""
+def start_service(project: str):
+    """Start the service detached, so it outlives this process; the process,
+    or None if another call is already starting it. A lock file stops two
+    calls arriving together from starting two services."""
     import subprocess
 
     os.makedirs(state_folder(), exist_ok=True)
@@ -97,7 +98,7 @@ def start_service(project: str) -> None:
     try:
         os.close(os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
     except FileExistsError:
-        return  # another call is starting it
+        return None  # another call is starting it
     command = [sys.executable, "-m", "taster_ai.adapters.claude_code.serve", project]
     options: dict = {
         "stdin": subprocess.DEVNULL,
@@ -109,11 +110,10 @@ def start_service(project: str) -> None:
     if os.name == "nt":
         flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
         try:  # leave any job object Claude Code runs hooks in
-            subprocess.Popen(command, creationflags=flags | subprocess.CREATE_BREAKAWAY_FROM_JOB, **options)
+            return subprocess.Popen(command, creationflags=flags | subprocess.CREATE_BREAKAWAY_FROM_JOB, **options)
         except OSError:
-            subprocess.Popen(command, creationflags=flags, **options)
-    else:
-        subprocess.Popen(command, start_new_session=True, **options)
+            return subprocess.Popen(command, creationflags=flags, **options)
+    return subprocess.Popen(command, start_new_session=True, **options)
 
 
 def ask(project: str, event: bytes) -> str:
@@ -124,9 +124,15 @@ def ask(project: str, event: bytes) -> str:
             return exchange(runtime, event)
         except NotRunning:
             pass
-    start_service(project)
+    process = start_service(project)
     deadline = time.monotonic() + START_TIMEOUT
     while time.monotonic() < deadline:
+        if process is not None and process.poll() is not None:
+            try:
+                os.remove(runtime_path(project) + ".lock")
+            except OSError:
+                pass
+            raise OSError("the service stopped while starting; is taster-ai[claude-code] installed?")
         fresh = read_runtime(project)
         if fresh and fresh != runtime:
             try:
