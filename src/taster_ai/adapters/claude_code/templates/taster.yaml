@@ -1,0 +1,30 @@
+# Which tool calls Taster checks, and how strictly.
+#
+# Tools not listed here are not judged. Every judged call uses your Claude
+# plan, so list the tools that can do harm, not every tool.
+#
+# mode: shadow    checked and logged, nothing blocked (start here)
+# mode: enforce   blocked when the judge says it breaks your rules
+#
+# With enforce, also set:
+#   on_error: block   a call the judge can't answer is blocked too
+#   threshold: 0.6    how sure the judge must be to block. The default, 0.85,
+#                     let real breaks through in testing: this judge's
+#                     confidence moves around (0.7 to 0.97 on clear cases).
+# Check the limits in the README first.
+
+judge: claude-cli
+model: haiku
+
+checks:
+  - check: constitution
+    standard_file: constitution.md
+    scope:
+      tool_call:
+        - { tool: "mcp__*mail*", mode: shadow }
+        - { tool: "mcp__*calendar*", mode: shadow }
+        - { tool: "mcp__*message*", mode: shadow }
+        - { tool: "mcp__*send*", mode: shadow }
+        - tool: Bash
+          mode: shadow
+          when_args: { command: '\b(curl|wget|ssh|scp|rsync|nc|sendmail)\b' }
