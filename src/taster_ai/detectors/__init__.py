@@ -6,10 +6,12 @@ from __future__ import annotations
 from typing import Any
 
 from .base import Detector, FallbackDetector
+from .claude_cli import ClaudeCliDetector
 from .patterns import InjectionPatterns
 from .jev import JevDetector
 
 __all__ = [
+    "ClaudeCliDetector",
     "Detector",
     "FallbackDetector",
     "InjectionPatterns",

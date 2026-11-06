@@ -34,7 +34,7 @@ import json
 import os
 from typing import Any, Mapping
 
-from .detectors import Detector, JevDetector, as_detector
+from .detectors import ClaudeCliDetector, Detector, JevDetector, as_detector
 from .scope import STAGES, Scope, Target, load_yaml
 from .standards import INJECTION_STANDARD
 
@@ -206,6 +206,17 @@ def _dumps(value: Any) -> str:
 _BUILT_IN = {"injection": Injection, "constitution": Constitution}
 
 
+def _named_judge(name: str | None, model: str | None) -> Detector | None:
+    """The judge a config file names; None for the default, Jev."""
+    if name in (None, "jev"):
+        if model is not None:
+            raise ValueError("model applies only to judge: claude-cli")
+        return None
+    if name == "claude-cli":
+        return ClaudeCliDetector(model=model) if model else ClaudeCliDetector()
+    raise ValueError(f"unknown judge {name!r}; judges are ['claude-cli', 'jev']")
+
+
 def checks_from_dict(data: Mapping[str, Any], folder: str | None = None) -> list[Check]:
     """Checks from plain data (what a YAML or JSON file holds):
 
@@ -219,12 +230,14 @@ def checks_from_dict(data: Mapping[str, Any], folder: str | None = None) -> list
 
     `check` picks a built-in check; leave it out for your own (then `name`,
     `standard` and `scope` are needed). `standard_file` is read relative to
-    `folder` (the YAML file's folder). Every check is judged by Jev; build
-    checks in code to use another judge. Unknown keys raise.
+    `folder` (the YAML file's folder). Every check is judged by Jev, or by
+    the file's `judge` ("jev" or "claude-cli", with `model` for claude-cli);
+    build checks in code to use any other judge. Unknown keys raise.
     """
-    unknown = set(data) - {"checks"}
+    unknown = set(data) - {"checks", "judge", "model"}
     if unknown:
-        raise ValueError(f"unknown keys: {sorted(unknown)} (the file holds checks only)")
+        raise ValueError(f"unknown keys: {sorted(unknown)} (the file holds checks only, plus judge and model)")
+    judge = _named_judge(data.get("judge"), data.get("model"))
     checks = []
     for raw in data.get("checks") or []:
         raw = dict(raw)
@@ -245,9 +258,9 @@ def checks_from_dict(data: Mapping[str, Any], folder: str | None = None) -> list
             missing = {"name", "standard", "scope"} - set(raw)
             if missing:
                 raise ValueError(f"check {raw.get('name')!r}: missing {sorted(missing)}")
-            checks.append(Check(**raw))
+            checks.append(Check(**raw, judge=judge))
         elif kind in _BUILT_IN:
-            checks.append(_BUILT_IN[kind](**raw))
+            checks.append(_BUILT_IN[kind](**raw, judge=judge))
         else:
             raise ValueError(f"unknown check {kind!r}; built-in checks are {sorted(_BUILT_IN)}")
     return checks
