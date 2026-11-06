@@ -172,7 +172,7 @@ counts are in
 ## Quickstart
 
 ```bash
-pip install "taster-ai[langchain,yaml] @ git+https://github.com/rinkesh2010rpp/taster-ai@v0.2.0.dev0"
+pip install "taster-ai[langchain,yaml] @ git+https://github.com/rinkesh2010rpp/taster-ai@v0.3.0.dev0"
 ```
 
 Write your rules in `constitution.md`, one plain sentence each, then add one
@@ -220,7 +220,7 @@ Check Claude Code's own tool calls through a hook, with no API key: the judge
 is the Claude Code CLI on your own login.
 
 ```bash
-pipx install "taster-ai[claude-code] @ git+https://github.com/rinkesh2010rpp/taster-ai"
+pipx install "taster-ai[claude-code] @ git+https://github.com/rinkesh2010rpp/taster-ai@v0.3.0.dev0"
 cd your-project
 taster init claude-code
 ```

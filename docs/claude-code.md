@@ -11,7 +11,7 @@ Claude Code CLI on your own login, so checks count against your Claude plan.
 ## 1. Install
 
 ```bash
-pipx install "taster-ai[claude-code] @ git+https://github.com/rinkesh2010rpp/taster-ai"
+pipx install "taster-ai[claude-code] @ git+https://github.com/rinkesh2010rpp/taster-ai@v0.3.0.dev0"
 ```
 
 Needs Python 3.10+. `pip install` works too.
