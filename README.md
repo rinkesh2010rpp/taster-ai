@@ -7,6 +7,12 @@ prompt injection before the agent reads it.**
 Trust takes months to build and one agent action to lose. Taster keeps that
 one action from running.
 
+![Taster blocking a production delete and a bulk email delete, letting two safe calls run, and withholding a page with a hidden prompt injection](docs/assets/demo.gif)
+
+<sub>A real run of [`examples/demo.py`](examples/demo.py), judged by Claude Haiku
+through the Claude Code CLI (no API key). Jev, the default judge, answers in
+about 0.3 s.</sub>
+
 ```bash
 pip install taster-ai
 ```
