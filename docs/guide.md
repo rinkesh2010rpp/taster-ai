@@ -9,7 +9,7 @@ every option is in the [reference](reference.md).
 Install from GitHub, pinned to a release:
 
 ```bash
-pip install "taster-ai[langchain,yaml] @ git+https://github.com/rinkesh2010rpp/taster-ai@v0.3.0.dev0"
+pip install "taster-ai[langchain,yaml]"
 ```
 
 Requires Python 3.10+ and, for the middleware, LangChain 1.x. (0.1.0.dev3 has

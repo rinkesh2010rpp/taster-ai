@@ -40,7 +40,7 @@ instead. This is experimental, and it's tested on Windows only; say so.
    before installing anything, then:
 
    ```bash
-   pipx install "taster-ai[claude-code] @ git+https://github.com/rinkesh2010rpp/taster-ai@v0.3.0.dev0"
+   pipx install "taster-ai[claude-code]"
    ```
 
    Needs Python 3.10+. `pip install` works too. If `taster` isn't found

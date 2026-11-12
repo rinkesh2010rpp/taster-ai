@@ -1,9 +1,15 @@
 # Taster
 
-**Trust takes months to build and one agent action to lose.**
+**Taster checks every tool call your AI agent makes against your rules,
+written in plain English, before it runs, and screens what comes back for
+prompt injection before the agent reads it.**
 
-Taster checks everything that goes into and out of your AI agent against your
-constitution, so that one action never runs.
+Trust takes months to build and one agent action to lose. Taster keeps that
+one action from running.
+
+```bash
+pip install taster-ai
+```
 
 [Quickstart](#quickstart) · [Agent skill](#let-your-coding-agent-set-it-up) · [Guide](docs/guide.md) · [Claude Code](docs/claude-code.md) · [Reference](docs/reference.md) · [Tested live](#tested-live)
 
@@ -172,7 +178,7 @@ counts are in
 ## Quickstart
 
 ```bash
-pip install "taster-ai[langchain,yaml] @ git+https://github.com/rinkesh2010rpp/taster-ai@v0.3.0.dev0"
+pip install "taster-ai[langchain,yaml]"
 ```
 
 Write your rules in `constitution.md`, one plain sentence each, then add one
@@ -220,7 +226,7 @@ Check Claude Code's own tool calls through a hook, with no API key: the judge
 is the Claude Code CLI on your own login.
 
 ```bash
-pipx install "taster-ai[claude-code] @ git+https://github.com/rinkesh2010rpp/taster-ai@v0.3.0.dev0"
+pipx install "taster-ai[claude-code]"
 cd your-project
 taster init claude-code
 ```

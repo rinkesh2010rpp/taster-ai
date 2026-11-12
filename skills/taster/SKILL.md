@@ -29,7 +29,7 @@ rather than forcing it.
    dependencies the way the project already manages them:
 
    ```bash
-   pip install "taster-ai[langchain,yaml] @ git+https://github.com/rinkesh2010rpp/taster-ai@v0.3.0.dev0"
+   pip install "taster-ai[langchain,yaml]"
    ```
 
    Needs Python 3.10+.
