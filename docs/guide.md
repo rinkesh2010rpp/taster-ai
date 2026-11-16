@@ -12,7 +12,8 @@ Install from GitHub, pinned to a release:
 pip install "taster-ai[langchain,yaml]"
 ```
 
-Requires Python 3.10+ and, for the middleware, LangChain 1.x. (0.1.0.dev3 has
+Requires Python 3.10+ and, for the middleware, LangChain 1.x, which needs
+Python 3.11+. (0.1.0.dev3 has
 the older `policy=` setup, documented in that tag's README.)
 
 ## 2. Write your constitution

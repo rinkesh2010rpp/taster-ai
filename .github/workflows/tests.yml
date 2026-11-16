@@ -13,16 +13,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-latest, python: "3.10" }
-          - { os: ubuntu-latest, python: "3.13" }
-          - { os: windows-latest, python: "3.13" }
-          - { os: macos-latest, python: "3.13" }
+          # LangChain and deepagents need Python 3.11+, so on 3.10 only the
+          # core is installed and the LangChain tests skip themselves.
+          - { os: ubuntu-latest, python: "3.10", extras: "dev" }
+          - { os: ubuntu-latest, python: "3.13", extras: "dev,deepagents" }
+          - { os: windows-latest, python: "3.13", extras: "dev,deepagents" }
+          - { os: macos-latest, python: "3.13", extras: "dev,deepagents" }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
       - name: Install
-        run: pip install -e ".[dev,deepagents]"
+        run: pip install -e ".[${{ matrix.extras }}]"
       - name: Test
         run: pytest -q
