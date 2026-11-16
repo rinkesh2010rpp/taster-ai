@@ -32,7 +32,7 @@ rather than forcing it.
    pip install "taster-ai[langchain,yaml]"
    ```
 
-   Needs Python 3.10+.
+   Needs Python 3.11+, because LangChain does.
 
 3. **Write `constitution.md` with the owner.** One plain sentence per
    principle. Propose a draft from what the agent's tools can do, then ask the

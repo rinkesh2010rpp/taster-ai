@@ -1,5 +1,9 @@
 # Taster
 
+[![Tests](https://github.com/rinkesh2010rpp/taster-ai/actions/workflows/tests.yml/badge.svg)](https://github.com/rinkesh2010rpp/taster-ai/actions/workflows/tests.yml)
+[![PyPI](https://img.shields.io/pypi/v/taster-ai)](https://pypi.org/project/taster-ai/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+
 **Taster checks every tool call your AI agent makes against your rules,
 written in plain English, before it runs, and screens what comes back for
 prompt injection before the agent reads it.**
@@ -204,8 +208,8 @@ agent = create_agent(model, tools, middleware=[taster])
 
 Both checks start in shadow mode and are judged by Jev, which needs
 `OPENROUTER_API_KEY`. Watch the log lines (`would=blocked`, `would=withheld`),
-then switch the tools you trust to `enforce`. Needs Python 3.10+ and
-LangChain 1.x.
+then switch the tools you trust to `enforce`. Needs LangChain 1.x, which
+needs Python 3.11+. Taster's core and the Claude Code hook run on 3.10+.
 
 Next: the [guide](docs/guide.md) (narrowing checks to tools, YAML config,
 choosing a judge, deepagents) and the [reference](docs/reference.md) (every
