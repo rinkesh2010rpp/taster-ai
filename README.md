@@ -1,5 +1,9 @@
 # Taster
 
+[![Tests](https://github.com/rinkesh2010rpp/taster-ai/actions/workflows/tests.yml/badge.svg)](https://github.com/rinkesh2010rpp/taster-ai/actions/workflows/tests.yml)
+[![PyPI](https://img.shields.io/pypi/v/taster-ai)](https://pypi.org/project/taster-ai/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+
 **Taster checks every tool call your AI agent makes against your rules,
 written in plain English, before it runs, and screens what comes back for
 prompt injection before the agent reads it.**
