@@ -1,6 +1,7 @@
 # Example checks. Load with TasterMiddleware.from_yaml("examples/taster.yaml")
-# (or checks_from_yaml). Every check here is judged by Jev; build checks in
-# Python to use another judge.
+# (or checks_from_yaml). Every check here is judged by Jev. For another
+# decision model add `model:` (and `url:` for a self-hosted one), or
+# `judge: claude-cli`; build checks in Python to use any other judge.
 checks:
   # Prompt injection in what tools return.
   - check: injection

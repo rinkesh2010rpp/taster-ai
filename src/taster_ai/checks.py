@@ -34,7 +34,7 @@ import json
 import os
 from typing import Any, Mapping
 
-from .detectors import ClaudeCliDetector, Detector, JevDetector, as_detector
+from .detectors import ClaudeCliDetector, DecisionDetector, Detector, as_detector
 from .scope import STAGES, Scope, Target, load_yaml
 from .standards import INJECTION_STANDARD
 
@@ -46,7 +46,8 @@ class Check:
     standard     plain words: what calls or results must follow
     scope        a Scope, or its dict form
     judge        a Detector, a LangChain chat model (wrapped in
-                 LLMDetector), or None for Jev with `jev_options`
+                 LLMDetector), or None for a DecisionDetector (Jev by default)
+                 built from `judge_options` (model, url, timeout, ...)
                  (timeout, title, referer, ...)
     detectors    extra judges by name, for targets that say `detector: <name>`
     """
@@ -62,7 +63,7 @@ class Check:
         judge: Any = None,
         *,
         detectors: Mapping[str, Any] | None = None,
-        **jev_options: Any,
+        **judge_options: Any,
     ):
         if not isinstance(name, str) or not name.strip():
             raise ValueError("a check needs a name")
@@ -71,9 +72,11 @@ class Check:
         self.name = name.strip()
         self.standard = standard.strip()
         self.scope = scope if isinstance(scope, Scope) else Scope.from_dict(scope)
-        if judge is not None and jev_options:
-            raise ValueError(f"check {self.name!r}: Jev options {sorted(jev_options)} apply only to the default judge")
-        self.judge: Detector = JevDetector(**jev_options) if judge is None else as_detector(judge)
+        if judge is not None and judge_options:
+            raise ValueError(
+                f"check {self.name!r}: judge options {sorted(judge_options)} apply only to the default judge"
+            )
+        self.judge: Detector = DecisionDetector(**judge_options) if judge is None else as_detector(judge)
         self.detectors = {n: as_detector(d) for n, d in (detectors or {}).items()}
         missing = sorted(
             {t.detector for t in self.scope.targets if t.mode != "pass" and t.detector} - set(self.detectors)
@@ -112,7 +115,7 @@ class Injection(Check):
         *,
         standard: str | None = None,
         detectors: Mapping[str, Any] | None = None,
-        **jev_options: Any,
+        **judge_options: Any,
     ):
         super().__init__(
             "injection",
@@ -120,7 +123,7 @@ class Injection(Check):
             scope if scope is not None else Scope(tool_result=[Target("*", mode="shadow")]),
             judge,
             detectors=detectors,
-            **jev_options,
+            **judge_options,
         )
 
     def reason(self, verdict: Any) -> str:
@@ -144,7 +147,7 @@ class Constitution(Check):
         judge: Any = None,
         *,
         detectors: Mapping[str, Any] | None = None,
-        **jev_options: Any,
+        **judge_options: Any,
     ):
         super().__init__(
             "constitution",
@@ -152,7 +155,7 @@ class Constitution(Check):
             scope if scope is not None else Scope(tool_call=[Target("*", mode="shadow")]),
             judge,
             detectors=detectors,
-            **jev_options,
+            **judge_options,
         )
 
     @classmethod
@@ -206,15 +209,26 @@ def _dumps(value: Any) -> str:
 _BUILT_IN = {"injection": Injection, "constitution": Constitution}
 
 
-def _named_judge(name: str | None, model: str | None) -> Detector | None:
-    """The judge a config file names; None for the default, Jev."""
-    if name in (None, "jev"):
-        if model is not None:
-            raise ValueError("model applies only to judge: claude-cli")
-        return None
+_DECISION_KEYS = ("model", "url", "breaks_at", "question")
+
+
+def _named_judge(data: Mapping[str, Any]) -> Detector | None:
+    """The judge a config file names; None for the default (Jev).
+
+    judge: decision (the default; "jev" is the same) takes `model`, `url`,
+    `breaks_at` and `question`, as DecisionDetector does. judge: claude-cli
+    takes `model` only.
+    """
+    name = data.get("judge")
+    opts = {k: data[k] for k in _DECISION_KEYS if data.get(k) is not None}
+    if name in (None, "decision", "jev"):
+        return DecisionDetector(**opts) if opts else None
     if name == "claude-cli":
-        return ClaudeCliDetector(model=model) if model else ClaudeCliDetector()
-    raise ValueError(f"unknown judge {name!r}; judges are ['claude-cli', 'jev']")
+        extra = sorted(set(opts) - {"model"})
+        if extra:
+            raise ValueError(f"{extra} apply only to judge: decision")
+        return ClaudeCliDetector(model=opts["model"]) if "model" in opts else ClaudeCliDetector()
+    raise ValueError(f"unknown judge {name!r}; judges are ['claude-cli', 'decision']")
 
 
 def checks_from_dict(data: Mapping[str, Any], folder: str | None = None) -> list[Check]:
@@ -230,14 +244,15 @@ def checks_from_dict(data: Mapping[str, Any], folder: str | None = None) -> list
 
     `check` picks a built-in check; leave it out for your own (then `name`,
     `standard` and `scope` are needed). `standard_file` is read relative to
-    `folder` (the YAML file's folder). Every check is judged by Jev, or by
-    the file's `judge` ("jev" or "claude-cli", with `model` for claude-cli);
+    `folder` (the YAML file's folder). Every check is judged by the file's
+    `judge`: "decision" (the default: Jev, or any decision model through
+    `model`, `url`, `breaks_at` and `question`) or "claude-cli" (with `model`);
     build checks in code to use any other judge. Unknown keys raise.
     """
-    unknown = set(data) - {"checks", "judge", "model"}
+    unknown = set(data) - {"checks", "judge", *_DECISION_KEYS}
     if unknown:
-        raise ValueError(f"unknown keys: {sorted(unknown)} (the file holds checks only, plus judge and model)")
-    judge = _named_judge(data.get("judge"), data.get("model"))
+        raise ValueError(f"unknown keys: {sorted(unknown)} (the file holds checks only, plus judge, model, url, breaks_at and question)")
+    judge = _named_judge(data)
     checks = []
     for raw in data.get("checks") or []:
         raw = dict(raw)

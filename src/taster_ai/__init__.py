@@ -29,10 +29,10 @@ _NAMES = {
     ),
     ".detectors": (
         "ClaudeCliDetector",
+        "DecisionDetector",
         "Detector",
         "FallbackDetector",
         "InjectionPatterns",
-        "JevDetector",
         "LLMDetector",
     ),
     ".scope": ("Scope", "Target"),

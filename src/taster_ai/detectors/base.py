@@ -61,7 +61,7 @@ class FallbackDetector(Detector):
     outage still catches the obvious attacks instead of passing everything
     through unscreened.
 
-        FallbackDetector(JevDetector(), my_chat_model, InjectionPatterns())
+        FallbackDetector(DecisionDetector(), my_chat_model, InjectionPatterns())
 
     Chat models are wrapped in LLMDetector automatically.
     """

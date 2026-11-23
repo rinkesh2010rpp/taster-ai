@@ -87,11 +87,29 @@ injection tool_result search_web mode=shadow label=breaks conf=0.97 action=passe
 ## 5. Choose the judge (optional)
 
 ```python
-from taster_ai import FallbackDetector, InjectionPatterns, JevDetector
+from taster_ai import DecisionDetector, FallbackDetector, InjectionPatterns
 
-Injection(scope=..., judge=FallbackDetector(JevDetector(), InjectionPatterns()))   # Jev, free fallback
-Constitution(standard=text, judge=ChatOpenAI(model="gpt-4.1-mini", temperature=0)) # your own LLM
+Injection(scope=..., judge=FallbackDetector(DecisionDetector(), InjectionPatterns()))  # Jev, free fallback
+Constitution(standard=text, judge=DecisionDetector(model="liquid/d1.2"))             # another decision model
+Constitution(standard=text, judge=ChatOpenAI(model="gpt-4.1-mini", temperature=0))   # your own LLM
 ```
+
+**Keep everything on your own machine.** Run a decision model that serves
+TypeSafe's System One API, such as [Kev](https://github.com/jaredpalmer/kev),
+and point Taster at it:
+
+```bash
+uv run --extra serve python -m kev.serve --run jaredpalmer/kev-4b@v1.0 --port 8009
+```
+
+```python
+judge = DecisionDetector(model="kev-latest", url="http://127.0.0.1:8009/v1/systemone",
+                         max_chars=24_000)
+```
+
+Start in shadow mode and read the logs before you enforce: a self-hosted
+model may need its own `breaks_at` cut-off and clearly written rules (see the
+[reference](reference.md#detectors)).
 
 `InjectionPatterns()` is free and needs no key, but only judges prompt
 injection: it ignores the standard. Use it in `Injection`, usually as a
@@ -121,7 +139,7 @@ middleware, so list there anything else it should keep (e.g. a customised
 
 | Variable | Needed when | Without it |
 |---|---|---|
-| `OPENROUTER_API_KEY` | you use `JevDetector()` without `api_key=` | Jev can't answer; a fallback detector takes over, or the target's `on_error` applies |
+| `OPENROUTER_API_KEY` | you use `DecisionDetector()` on OpenRouter (the default) without `api_key=` | Jev can't answer; a fallback detector takes over, or the target's `on_error` applies |
 | `TASTER_CHECKS` (or a name you choose) | you load checks with `checks_from_env()` | your default checks are used |
 
 `Injection()` and `Constitution()` are judged by Jev by default, so they need
