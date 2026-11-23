@@ -104,7 +104,7 @@ checks = [
 - **Shadow mode first.** It logs what it would block and changes nothing until you switch it on.
 - **It never breaks your agent.** If the judge is down or slow, the work goes on.
 - **Nothing sensitive is logged.** Only a fingerprint of the text, never the text.
-- **Fits your stack.** One middleware for LangChain or deepagents; Jev, your own LLM or your own judge.
+- **Fits your stack.** One middleware for LangChain or deepagents; Jev or any decision model (on OpenRouter or self-hosted), your own LLM, or your own judge.
 - **Your own rules too.** Any boundary you can say in a sentence; no policy language.
 
 ## Tested live

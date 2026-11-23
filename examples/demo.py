@@ -10,7 +10,7 @@ import os
 import sys
 import time
 
-from taster_ai import ClaudeCliDetector, Constitution, Injection, JevDetector, Scope, Screener, Target
+from taster_ai import ClaudeCliDetector, Constitution, Injection, DecisionDetector, Scope, Screener, Target
 
 CONSTITUTION = """\
 Never touch production.
@@ -55,7 +55,7 @@ def verdict_line(outcome, blocked_word, passed_word):
 
 
 def main():
-    judge = JevDetector(timeout=20) if os.environ.get("OPENROUTER_API_KEY") else ClaudeCliDetector()
+    judge = DecisionDetector(timeout=20) if os.environ.get("OPENROUTER_API_KEY") else ClaudeCliDetector()
     enforce = Scope(tool_call=[Target("*", mode="enforce")], tool_result=[Target("*", mode="enforce")])
     screener = Screener(
         [Constitution(CONSTITUTION, Scope(tool_call=enforce.tool_call), judge=judge),

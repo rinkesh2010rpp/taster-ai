@@ -20,6 +20,9 @@
 #                     confidence moves around (0.7 to 0.97 on clear cases).
 # Check the limits in the README first.
 
+# The judge. claude-cli uses your Claude login. For a decision model, use
+# `judge: decision` with `model:` (OpenRouter, needs OPENROUTER_API_KEY) or
+# with `url:` for a self-hosted one such as Kev, so nothing leaves your machine.
 judge: claude-cli
 model: haiku
 

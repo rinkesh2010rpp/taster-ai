@@ -152,6 +152,30 @@ def test_checks_in_a_config_file_share_one_judge():
     assert first.judge is second.judge
 
 
+def test_a_config_file_can_pick_any_decision_model():
+    from taster_ai import DecisionDetector
+
+    data = {"judge": "decision", "model": "kev-latest", "url": "http://127.0.0.1:8009/v1/systemone",
+            "breaks_at": 0.25, "checks": [{"check": "constitution", "standard": "Be kind."}, {"check": "injection"}]}
+    first, second = checks_from_dict(data)
+    assert isinstance(first.judge, DecisionDetector) and first.judge is second.judge
+    assert (first.judge.model, first.judge.url, first.judge.breaks_at) == ("kev-latest", data["url"], 0.25)
+
+
+def test_judge_jev_still_means_the_default_decision_model():
+    from taster_ai import DecisionDetector
+
+    (check,) = checks_from_dict({"judge": "jev", "checks": [{"check": "constitution", "standard": "a"}]})
+    assert isinstance(check.judge, DecisionDetector) and check.judge.model == "typesafe/jev-1.13"
+    (check,) = checks_from_dict({"model": "liquid/d1.2", "checks": [{"check": "constitution", "standard": "a"}]})
+    assert check.judge.model == "liquid/d1.2"  # no judge named: decision is the default
+
+
+def test_decision_options_are_refused_for_claude_cli():
+    with pytest.raises(ValueError, match="only to judge: decision"):
+        checks_from_dict({"judge": "claude-cli", "url": "http://x", "checks": []})
+
+
 def test_an_unknown_judge_is_refused():
     with pytest.raises(ValueError, match="unknown judge"):
         checks_from_dict({"judge": "gpt", "checks": []})

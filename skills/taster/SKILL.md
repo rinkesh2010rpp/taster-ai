@@ -84,8 +84,10 @@ rather than forcing it.
    reads `OPENROUTER_API_KEY` from the environment. Ask the owner to set it
    themselves. Never write a key into code, config or `.env` files yourself,
    and never ask for it in chat. To use another judge instead, pass
-   `judge=` (any LangChain chat model, or `InjectionPatterns()` for a free,
-   keyless injection-only fallback); see the
+   `judge=`: another decision model (`DecisionDetector(model=...)`), a
+   self-hosted one that keeps everything on the machine
+   (`DecisionDetector(url=...)`, e.g. Kev), any LangChain chat model, or
+   `InjectionPatterns()` for a free, keyless injection-only fallback; see the
    [guide](https://github.com/rinkesh2010rpp/taster-ai/blob/main/docs/guide.md#5-choose-the-judge-optional).
 
 6. **Check it runs.** Run the agent once and look for log lines like

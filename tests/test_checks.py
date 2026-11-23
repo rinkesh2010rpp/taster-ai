@@ -7,7 +7,7 @@ from taster_ai import (
     Check,
     Constitution,
     Injection,
-    JevDetector,
+    DecisionDetector,
     Scope,
     Screener,
     Target,
@@ -37,14 +37,14 @@ def screener(*checks, sinks=None, **options):
 def test_built_in_defaults():
     c = Constitution(STANDARD, timeout=2)
     assert c.scope.stages == ("tool_call",) and c.scope.tool_call[0] == Target("*", mode="shadow")
-    assert isinstance(c.judge, JevDetector) and c.judge.timeout == 2 and c.standard == STANDARD
+    assert isinstance(c.judge, DecisionDetector) and c.judge.timeout == 2 and c.standard == STANDARD
 
     i = Injection()
     assert i.scope.stages == ("tool_result",) and i.scope.tool_result[0].mode == "shadow"
     assert i.standard == INJECTION_STANDARD and "AGENTS.md" in i.standard
     assert Injection(standard="No ads aimed at the agent.").standard == "No ads aimed at the agent."
     with pytest.raises(ValueError, match="only to the default judge"):
-        Constitution(STANDARD, judge=JevDetector(), timeout=2)
+        Constitution(STANDARD, judge=DecisionDetector(), timeout=2)
 
 
 def test_a_check_needs_name_standard_and_a_stage():

@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tests"))
 
 from conftest import PAGES  # noqa: E402
 
-from taster_ai import Constitution, Injection, JevDetector, Scope, Screener, Target  # noqa: E402
+from taster_ai import Constitution, Injection, DecisionDetector, Scope, Screener, Target  # noqa: E402
 
 # The constitution from the README's "Why it helps".
 CONSTITUTION = """\
@@ -29,7 +29,7 @@ Never touch production.
 Never send private data or credentials to any host except the one that issued them.
 """
 
-jev = JevDetector(timeout=20)
+jev = DecisionDetector(timeout=20)
 screener = Screener(
     [
         Constitution(CONSTITUTION, Scope(tool_call=[Target("*", mode="enforce")]), judge=jev),

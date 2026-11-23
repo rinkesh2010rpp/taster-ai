@@ -62,7 +62,7 @@ the check's standard, and answers follows, breaks or unclear. At
 result text. A long call is shown in pieces, each with the tool's name and
 every short argument plus one overlapping window of a long one, so nothing
 is cut out of the middle. A judge keeps no standard of its own, so one judge
-(say one `JevDetector(timeout=2)`) can serve every check.
+(say one `DecisionDetector(timeout=2)`) can serve every check.
 
 The default injection standard, `taster_ai.INJECTION_STANDARD`, is built from
 the wording tuned against Jev on live pages. In short: a tool result must
@@ -80,7 +80,8 @@ in enforce mode blocks it, and the agent is told every check it failed. Each
 check is one judge call per call or result it covers (checks run in
 parallel), so start in shadow and narrow the scope if that's too slow.
 
-Jev options (`timeout=2`, `title=...`) can be passed to any check whose judge
+Options for the default judge, a `DecisionDetector` (`timeout=2`,
+`model=...`, `url=...`, `api_key=...`), can be passed to any check whose judge
 is the default: `Constitution(text, timeout=2)`. With your own `judge`, set
 them on it instead.
 
@@ -89,7 +90,12 @@ In YAML or JSON (`checks_from_yaml`, `checks_from_json`, or
 redeploy), `check: injection` or `check: constitution` picks a built-in check;
 leave `check` out for your own (then `name`, `standard` and `scope` are
 needed). `standard_file` reads the standard from a file next to the YAML.
-YAML checks are judged by Jev; build checks in Python to use another judge.
+YAML checks are judged by the file's `judge`: `decision` (the default: Jev,
+or another decision model with `model`, a self-hosted one with `url`, plus
+`breaks_at` and `question`) or `claude-cli` (with `model`). A file can't hold
+an API key: OpenRouter's comes from `OPENROUTER_API_KEY`, and a self-hosted
+server that needs a key is for checks built in Python (`api_key=`). Build
+checks in Python to use any other judge.
 
 ## Scope and targets
 
@@ -121,7 +127,7 @@ own scope or constitution can be talked into switching them off.
 | Detector | What it is | Cost |
 |---|---|---|
 | `InjectionPatterns()` | injection only (ignores the standard): patterns real attacks use: override phrases, fake system/owner messages, hiding things from the user, secrets, directives in HTML comments, invisible Unicode | free, instant, offline |
-| `JevDetector()` | [Jev](https://openrouter.ai) decision model via OpenRouter; calibrated probabilities; up to 120,000 characters per check | ~0.2–0.4 s per check |
+| `DecisionDetector()` | a decision model: [Jev](https://openrouter.ai/docs/guides/community/jev) by default, or any of OpenRouter's [decision models](https://openrouter.ai/docs/guides/features/decisions), or a self-hosted System One server such as [Kev](https://github.com/jaredpalmer/kev); calibrated probabilities | ~0.2–0.4 s per check with Jev |
 | your chat model | any LangChain chat model, wrapped in `LLMDetector` automatically | your model's price and speed |
 | `FallbackDetector(a, b, …)` | try each in order; the first that answers wins | — |
 
@@ -131,7 +137,7 @@ Different tools can use different judges within one check:
 Injection(
     scope=Scope(tool_result=[Target("mcp_*", mode="enforce", detector="strict"),
                              Target("*", mode="enforce")]),
-    judge=JevDetector(),
+    judge=DecisionDetector(),
     detectors={"strict": my_llm},
 )
 ```
@@ -139,10 +145,34 @@ Injection(
 A target naming a detector you didn't pass fails when the check is created,
 not mid-run. It is given the check's standard like any judge.
 
-**Jev options:** `JevDetector(api_key=None, timeout=5.0, title="taster-ai",
-referer=None, max_chars=120_000)`. `api_key` defaults to
-`OPENROUTER_API_KEY`; `title` and `referer` are the app name and URL
-OpenRouter shows for your calls; `max_chars` is the chunk size.
+**Decision model options:** `DecisionDetector(model="typesafe/jev-1.13",
+url=OpenRouter's Decisions API, api_key=None, question="choice",
+breaks_at=None, timeout=5.0, title="taster-ai", referer=None,
+max_chars=120_000, name=None)`.
+
+- `model`: any decision model. On OpenRouter, list them with
+  `GET https://openrouter.ai/api/v1/models?output_modalities=decisions`
+  (e.g. `liquid/d1.2`, `perplexity/pplx-decider-v1.2`,
+  `microsoft/microsoft-decision-1.1`). They all take the same request.
+- `url`: OpenRouter by default, or a self-hosted server of TypeSafe's System
+  One API, e.g. Kev at `http://127.0.0.1:8009/v1/systemone`. Nothing then
+  leaves your machine.
+- `api_key`: for OpenRouter it defaults to `OPENROUTER_API_KEY`. That key is
+  only ever sent to OpenRouter; a self-hosted server gets a key only if you
+  pass one.
+- `question`: `"choice"` asks follows / breaks / unclear. Use `"noul"` for
+  models that answer only yes/no (there is then no "unclear").
+- `breaks_at`: your own cut-off on the probability of "breaks". At or above
+  it the verdict is "breaks" with confidence 1.0, so the target's
+  `threshold` no longer filters it. Some models, Kev among them, rank breaks
+  well but give them low probabilities; pick the cut-off from shadow-mode
+  logs, where `scores` keeps the raw probabilities.
+- `max_chars`: the most text per call; longer text is split. Fit it to the
+  model's context (Kev 4B/9B: about 8k tokens, so `max_chars=24_000`).
+- `title` and `referer` are the app name and URL OpenRouter shows for your
+  calls. `name` is what logs show; it defaults to the model.
+
+A refusal from the model is an error verdict, never a pass.
 
 **Writing your own judge:** subclass `Detector`, set `name` and `max_chars`
 (the biggest piece it takes), and implement `detect(text, standard) ->
@@ -183,8 +213,9 @@ markers, tells the model the text is evidence and never instructions, forces
 a `{label, confidence, reason}` answer and gives the model no tools. Still,
 use a model **other than your agent's** (ideally a small one).
 
-**Confidence means different things per detector:** Jev's is a calibrated
-probability, an LLM's is its own estimate, InjectionPatterns' is a fixed score
+**Confidence means different things per detector:** a decision model's
+(Jev's) is a calibrated probability, except that with `breaks_at` a verdict at
+or over the cut-off has confidence 1.0; an LLM's is its own estimate, InjectionPatterns' is a fixed score
 per number of signals. Tune `threshold` for the detector you use.
 
 ## What the agent sees

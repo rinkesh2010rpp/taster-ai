@@ -7,15 +7,15 @@ from typing import Any
 
 from .base import Detector, FallbackDetector
 from .claude_cli import ClaudeCliDetector
+from .decision import DecisionDetector
 from .patterns import InjectionPatterns
-from .jev import JevDetector
 
 __all__ = [
     "ClaudeCliDetector",
+    "DecisionDetector",
     "Detector",
     "FallbackDetector",
     "InjectionPatterns",
-    "JevDetector",
     "LLMDetector",
     "as_detector",
 ]

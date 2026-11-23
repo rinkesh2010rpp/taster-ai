@@ -13,14 +13,14 @@ from taster_ai import (
     FallbackDetector,
     Injection,
     InjectionPatterns,
-    JevDetector,
+    DecisionDetector,
     Scope,
     Screener,
     Target,
     print_sink,
 )
 
-jev = JevDetector()
+jev = DecisionDetector()
 screener = Screener(
     [
         Injection(
