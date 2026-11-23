@@ -48,7 +48,6 @@ class Check:
     judge        a Detector, a LangChain chat model (wrapped in
                  LLMDetector), or None for a DecisionDetector (Jev by default)
                  built from `judge_options` (model, url, timeout, ...)
-                 (timeout, title, referer, ...)
     detectors    extra judges by name, for targets that say `detector: <name>`
     """
 
