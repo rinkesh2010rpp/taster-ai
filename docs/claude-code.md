@@ -166,8 +166,19 @@ and it has no servers.
 
 The judge runs on your own Claude login, so checks go to Anthropic under your
 account, the same way Claude Code's own requests do. That includes your rules
-and the tool calls being judged. If that text can't leave your machine, don't
-use this judge on that data until there's a local option.
+and the tool calls being judged. If that text can't leave your machine, use
+a self-hosted decision model instead, such as
+[Kev](https://github.com/jaredpalmer/kev), so nothing leaves it:
+
+```yaml
+judge: decision
+model: kev-latest
+url: http://127.0.0.1:8009/v1/systemone
+```
+
+The server must run without a key, because `taster.yaml` can't hold one. Start
+in shadow mode and check its verdicts before you enforce: see the
+[reference](reference.md#detectors) for `breaks_at` and `max_chars`.
 
 
 ## Speed

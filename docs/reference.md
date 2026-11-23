@@ -80,7 +80,8 @@ in enforce mode blocks it, and the agent is told every check it failed. Each
 check is one judge call per call or result it covers (checks run in
 parallel), so start in shadow and narrow the scope if that's too slow.
 
-Jev options (`timeout=2`, `title=...`) can be passed to any check whose judge
+Options for the default judge, a `DecisionDetector` (`timeout=2`,
+`model=...`, `url=...`, `api_key=...`), can be passed to any check whose judge
 is the default: `Constitution(text, timeout=2)`. With your own `judge`, set
 them on it instead.
 
@@ -89,7 +90,12 @@ In YAML or JSON (`checks_from_yaml`, `checks_from_json`, or
 redeploy), `check: injection` or `check: constitution` picks a built-in check;
 leave `check` out for your own (then `name`, `standard` and `scope` are
 needed). `standard_file` reads the standard from a file next to the YAML.
-YAML checks are judged by Jev; build checks in Python to use another judge.
+YAML checks are judged by the file's `judge`: `decision` (the default: Jev,
+or another decision model with `model`, a self-hosted one with `url`, plus
+`breaks_at` and `question`) or `claude-cli` (with `model`). A file can't hold
+an API key: OpenRouter's comes from `OPENROUTER_API_KEY`, and a self-hosted
+server that needs a key is for checks built in Python (`api_key=`). Build
+checks in Python to use any other judge.
 
 ## Scope and targets
 
@@ -207,8 +213,9 @@ markers, tells the model the text is evidence and never instructions, forces
 a `{label, confidence, reason}` answer and gives the model no tools. Still,
 use a model **other than your agent's** (ideally a small one).
 
-**Confidence means different things per detector:** Jev's is a calibrated
-probability, an LLM's is its own estimate, InjectionPatterns' is a fixed score
+**Confidence means different things per detector:** a decision model's
+(Jev's) is a calibrated probability, except that with `breaks_at` a verdict at
+or over the cut-off has confidence 1.0; an LLM's is its own estimate, InjectionPatterns' is a fixed score
 per number of signals. Tune `threshold` for the detector you use.
 
 ## What the agent sees

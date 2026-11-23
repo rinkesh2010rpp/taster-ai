@@ -107,6 +107,17 @@ judge = DecisionDetector(model="kev-latest", url="http://127.0.0.1:8009/v1/syste
                          max_chars=24_000)
 ```
 
+If your server needs a key (Kev's `KEV_API_KEY`), pass it, read from the
+environment rather than written in code. Use `https://` for a server on
+another machine, since the key travels in a header:
+
+```python
+judge = DecisionDetector(model="kev-latest", url="https://kev.example.internal/v1/systemone",
+                         api_key=os.environ["KEV_API_KEY"], max_chars=24_000)
+```
+
+Your OpenRouter key is never sent to a self-hosted server.
+
 Start in shadow mode and read the logs before you enforce: a self-hosted
 model may need its own `breaks_at` cut-off and clearly written rules (see the
 [reference](reference.md#detectors)).
